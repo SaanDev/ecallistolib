@@ -1,0 +1,9 @@
+numpy>=1.23
+astropy>=5.3
+
+[download]
+requests>=2.31
+beautifulsoup4>=4.12
+
+[plot]
+matplotlib>=3.7

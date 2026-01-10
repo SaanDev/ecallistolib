@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable
 
 import numpy as np
 
@@ -11,6 +10,12 @@ from .models import DynamicSpectrum
 
 
 def can_combine_frequency(path1: str | Path, path2: str | Path, time_atol: float = 0.01) -> bool:
+    """
+    True if:
+      - same station/date/time
+      - different focus (01 vs 02)
+      - time axes match within tolerance
+    """
     p1 = parse_callisto_filename(path1)
     p2 = parse_callisto_filename(path2)
 
@@ -25,6 +30,9 @@ def can_combine_frequency(path1: str | Path, path2: str | Path, time_atol: float
 
 
 def combine_frequency(path1: str | Path, path2: str | Path) -> DynamicSpectrum:
+    """
+    Stack two spectra along frequency axis (vertical stacking).
+    """
     ds1 = read_fits(path1)
     ds2 = read_fits(path2)
 
@@ -37,6 +45,11 @@ def combine_frequency(path1: str | Path, path2: str | Path) -> DynamicSpectrum:
 
 
 def can_combine_time(paths: Iterable[str | Path], freq_atol: float = 0.01) -> bool:
+    """
+    True if all files:
+      - same station/date/focus
+      - same frequency axis within tolerance
+    """
     paths = list(paths)
     if len(paths) < 2:
         return False
@@ -45,10 +58,10 @@ def can_combine_time(paths: Iterable[str | Path], freq_atol: float = 0.01) -> bo
     stations = {p.station for p in parts}
     dates = {p.date_yyyymmdd for p in parts}
     focuses = {p.focus for p in parts}
+
     if len(stations) != 1 or len(dates) != 1 or len(focuses) != 1:
         return False
 
-    # Check same frequency axis
     ref = read_fits(paths[0]).freqs_mhz
     for p in paths[1:]:
         freqs = read_fits(p).freqs_mhz
@@ -59,6 +72,10 @@ def can_combine_time(paths: Iterable[str | Path], freq_atol: float = 0.01) -> bo
 
 
 def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
+    """
+    Concatenate spectra along time axis (horizontal concatenation).
+    Assumes all have identical frequency axis.
+    """
     paths = sorted(list(paths), key=lambda p: parse_callisto_filename(p).time_hhmmss)
 
     ds0 = read_fits(paths[0])
@@ -68,7 +85,12 @@ def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
 
     for p in paths[1:]:
         ds = read_fits(p)
-        dt = float(ds.time_s[1] - ds.time_s[0])
+
+        if ds.time_s.size > 1:
+            dt = float(ds.time_s[1] - ds.time_s[0])
+        else:
+            dt = 1.0
+
         shift = float(combined_time[-1] + dt)
         adjusted_time = ds.time_s + shift
 
@@ -78,3 +100,4 @@ def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
     meta = dict(ds0.meta)
     meta["combined"] = {"mode": "time", "sources": [str(Path(p)) for p in paths]}
     return DynamicSpectrum(data=combined_data, freqs_mhz=freqs, time_s=combined_time, source=None, meta=meta)
+

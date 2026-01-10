@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ecallisto-fits"
+version = "0.1.0"
+description = "Tools to download, read, process, and plot e-CALLISTO FITS dynamic spectra."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Sahan S. Liyanage"}]
+dependencies = [
+  "numpy>=1.23",
+  "astropy>=5.3",
+]
+
+[project.optional-dependencies]
+download = ["requests>=2.31", "beautifulsoup4>=4.12"]
+plot = ["matplotlib>=3.7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

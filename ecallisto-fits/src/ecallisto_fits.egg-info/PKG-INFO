@@ -1,3 +1,19 @@
 Metadata-Version: 2.4
-Name: ecallisto_fits
-Version: 0.0.0
+Name: ecallisto-fits
+Version: 0.1.0
+Summary: Tools to download, read, process, and plot e-CALLISTO FITS dynamic spectra.
+Author: Sahan S. Liyanage
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.23
+Requires-Dist: astropy>=5.3
+Provides-Extra: download
+Requires-Dist: requests>=2.31; extra == "download"
+Requires-Dist: beautifulsoup4>=4.12; extra == "download"
+Provides-Extra: plot
+Requires-Dist: matplotlib>=3.7; extra == "plot"
+
+# ecallisto-fits
+
+A Python library to download, read, process, and plot e-CALLISTO FITS dynamic spectra.

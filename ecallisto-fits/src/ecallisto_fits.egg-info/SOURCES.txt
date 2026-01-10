@@ -1,6 +1,7 @@
+README.md
 pyproject.toml
-src/combine.py
 src/ecallisto_fits/__init__.py
+src/ecallisto_fits/combine.py
 src/ecallisto_fits/download.py
 src/ecallisto_fits/io.py
 src/ecallisto_fits/models.py
@@ -9,6 +10,9 @@ src/ecallisto_fits/processing.py
 src/ecallisto_fits.egg-info/PKG-INFO
 src/ecallisto_fits.egg-info/SOURCES.txt
 src/ecallisto_fits.egg-info/dependency_links.txt
+src/ecallisto_fits.egg-info/requires.txt
 src/ecallisto_fits.egg-info/top_level.txt
+tests/test_imports.py
 tests/test_io.py
+tests/test_processing.py
 tests/test_smoke.py
