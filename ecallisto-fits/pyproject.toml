@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ecallisto-fits"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tools to download, read, process, and plot e-CALLISTO FITS dynamic spectra."
 readme = "README.md"
 requires-python = ">=3.10"

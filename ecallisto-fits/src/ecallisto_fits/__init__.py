@@ -1,8 +1,19 @@
+"""ecallisto-fits: Tools for e-CALLISTO FITS dynamic spectra."""
+
 from importlib.metadata import PackageNotFoundError, version
 
-from .io import parse_callisto_filename, read_fits
+from .exceptions import (
+    CombineError,
+    CropError,
+    DownloadError,
+    ECallistoError,
+    InvalidFilenameError,
+    InvalidFITSError,
+)
+from .io import CallistoFileParts, parse_callisto_filename, read_fits
 from .models import DynamicSpectrum
 from .processing import noise_reduce_mean_clip
+from .crop import crop, crop_frequency, crop_time, slice_by_index
 
 try:
     __version__ = version("ecallisto-fits")
@@ -10,14 +21,33 @@ except PackageNotFoundError:
     __version__ = "0.0.0"
 
 __all__ = [
+    # Version
     "__version__",
+    # Core
     "DynamicSpectrum",
+    "CallistoFileParts",
+    # I/O
     "parse_callisto_filename",
     "read_fits",
+    # Processing
     "noise_reduce_mean_clip",
+    # Cropping
+    "crop",
+    "crop_frequency",
+    "crop_time",
+    "slice_by_index",
+    # Exceptions
+    "ECallistoError",
+    "InvalidFITSError",
+    "InvalidFilenameError",
+    "DownloadError",
+    "CombineError",
+    "CropError",
 ]
 
+
 def __getattr__(name: str):
+    """Lazy imports for optional dependencies."""
     if name in {"combine_time", "combine_frequency", "can_combine_time", "can_combine_frequency"}:
         from .combine import can_combine_frequency, can_combine_time, combine_frequency, combine_time
         return {

@@ -18,6 +18,7 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
   - [Reading FITS Files](#reading-fits-files)
   - [Downloading Data](#downloading-data)
   - [Processing Data](#processing-data)
+  - [Cropping & Slicing](#cropping--slicing)
   - [Combining Spectra](#combining-spectra)
   - [Plotting](#plotting)
 - [API Reference](#api-reference)
@@ -25,8 +26,10 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
   - [I/O Functions](#io-functions)
   - [Download Functions](#download-functions)
   - [Processing Functions](#processing-functions)
+  - [Cropping Functions](#cropping-functions)
   - [Combine Functions](#combine-functions)
   - [Plotting Functions](#plotting-functions)
+  - [Exceptions](#exceptions)
 - [Examples](#examples)
 - [Contributing](#contributing)
 - [License](#license)
@@ -38,8 +41,10 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 - 📥 **Download** – List and download FITS files directly from the e-CALLISTO data archive
 - 📖 **Read** – Parse e-CALLISTO FITS files (`.fit`, `.fit.gz`) into structured Python objects
 - 🔧 **Process** – Apply noise reduction techniques (mean subtraction, clipping, scaling)
+- ✂️ **Crop** – Extract frequency and time ranges from spectra
 - 🔗 **Combine** – Merge multiple spectra along the time or frequency axis
 - 📊 **Plot** – Generate publication-ready dynamic spectrum visualizations
+- ⚠️ **Error Handling** – Custom exceptions for robust error management
 
 ---
 
@@ -181,6 +186,52 @@ print(cleaned.meta["noise_reduction"])
 1. Subtract the mean intensity over time for each frequency channel (removes baseline)
 2. Clip values to the specified range
 3. Apply optional scaling factor
+
+---
+
+### Cropping & Slicing
+
+Extract specific frequency or time ranges from a spectrum:
+
+#### Crop by Physical Values
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Crop to specific frequency range (in MHz)
+cropped = ecf.crop_frequency(spectrum, freq_min=100, freq_max=300)
+
+# Crop to specific time range (in seconds)
+cropped = ecf.crop_time(spectrum, time_min=10, time_max=60)
+
+# Crop both axes at once
+cropped = ecf.crop(spectrum, freq_range=(100, 300), time_range=(10, 60))
+```
+
+#### Slice by Array Index
+
+```python
+# Get first 100 frequency channels
+sliced = ecf.slice_by_index(spectrum, freq_slice=slice(0, 100))
+
+# Get every other time sample (downsampling)
+sliced = ecf.slice_by_index(spectrum, time_slice=slice(None, None, 2))
+
+# Combine slices
+sliced = ecf.slice_by_index(spectrum, freq_slice=slice(50, 150), time_slice=slice(0, 500))
+```
+
+#### Cropping Preserves Metadata
+
+```python
+cropped = ecf.crop(spectrum, freq_range=(100, 200))
+
+# Check what was cropped
+print(cropped.meta["cropped"])
+# {'frequency': {'min': 100, 'max': 200}}
+```
 
 ---
 
@@ -384,6 +435,60 @@ Apply noise reduction via mean subtraction and clipping.
 
 ---
 
+### Cropping Functions
+
+#### `crop_frequency(ds, freq_min=None, freq_max=None) -> DynamicSpectrum`
+
+Crop a spectrum to a frequency range.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `freq_min` | `float \| None` | Minimum frequency in MHz (inclusive) |
+| `freq_max` | `float \| None` | Maximum frequency in MHz (inclusive) |
+
+**Raises:** `CropError` if range is invalid or results in empty data.
+
+---
+
+#### `crop_time(ds, time_min=None, time_max=None) -> DynamicSpectrum`
+
+Crop a spectrum to a time range.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `time_min` | `float \| None` | Minimum time in seconds |
+| `time_max` | `float \| None` | Maximum time in seconds |
+
+**Raises:** `CropError` if range is invalid or results in empty data.
+
+---
+
+#### `crop(ds, freq_range=None, time_range=None) -> DynamicSpectrum`
+
+Crop a spectrum along both axes at once.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `freq_range` | `tuple \| None` | `(min, max)` frequency in MHz |
+| `time_range` | `tuple \| None` | `(min, max)` time in seconds |
+
+---
+
+#### `slice_by_index(ds, freq_slice=None, time_slice=None) -> DynamicSpectrum`
+
+Slice a spectrum by array indices.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `freq_slice` | `slice \| None` | Slice for frequency axis |
+| `time_slice` | `slice \| None` | Slice for time axis |
+
+---
+
 ### Combine Functions
 
 #### `can_combine_frequency(path1, path2, time_atol=0.01) -> bool`
@@ -425,6 +530,40 @@ Plot a dynamic spectrum.
 | `show_colorbar` | `bool` | `True` | Whether to display colorbar |
 
 **Returns:** Tuple of `(fig, ax, im)`.
+
+---
+
+### Exceptions
+
+The library provides a hierarchy of custom exceptions for robust error handling:
+
+| Exception | Description |
+|-----------|-------------|
+| `ECallistoError` | Base exception for all library errors |
+| `InvalidFITSError` | Raised when a FITS file is invalid or cannot be read |
+| `InvalidFilenameError` | Raised when a filename doesn't match e-CALLISTO naming convention |
+| `DownloadError` | Raised when downloading files from the archive fails |
+| `CombineError` | Raised when spectra cannot be combined |
+| `CropError` | Raised when cropping parameters are invalid |
+
+#### Error Handling Example
+
+```python
+import ecallisto_fits as ecf
+from ecallisto_fits import InvalidFITSError, CropError
+
+try:
+    spectrum = ecf.read_fits("corrupted_file.fit")
+except FileNotFoundError:
+    print("File not found")
+except InvalidFITSError as e:
+    print(f"Invalid FITS file: {e}")
+
+try:
+    cropped = ecf.crop(spectrum, freq_range=(1000, 2000))  # Out of range
+except CropError as e:
+    print(f"Cropping failed: {e}")
+```
 
 ---
 
