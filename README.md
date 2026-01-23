@@ -56,6 +56,14 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 ```bash
 pip install ecallistolib
 ```
+
+### Optional Dependencies
+
+Install optional features as needed:
+
+```bash
+pip install ecallistolib"[download,plot]"
+```
 ### From Source (Development)
 
 ```bash
