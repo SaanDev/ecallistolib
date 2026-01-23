@@ -18,6 +18,7 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
   - [Reading FITS Files](#reading-fits-files)
   - [Downloading Data](#downloading-data)
   - [Processing Data](#processing-data)
+  - [Cropping & Slicing](#cropping--slicing)
   - [Combining Spectra](#combining-spectra)
   - [Plotting](#plotting)
 - [API Reference](#api-reference)
@@ -25,8 +26,10 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
   - [I/O Functions](#io-functions)
   - [Download Functions](#download-functions)
   - [Processing Functions](#processing-functions)
+  - [Cropping Functions](#cropping-functions)
   - [Combine Functions](#combine-functions)
   - [Plotting Functions](#plotting-functions)
+  - [Exceptions](#exceptions)
 - [Examples](#examples)
 - [Contributing](#contributing)
 - [License](#license)
@@ -38,8 +41,10 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 - 📥 **Download** – List and download FITS files directly from the e-CALLISTO data archive
 - 📖 **Read** – Parse e-CALLISTO FITS files (`.fit`, `.fit.gz`) into structured Python objects
 - 🔧 **Process** – Apply noise reduction techniques (mean subtraction, clipping, scaling)
+- ✂️ **Crop** – Extract frequency and time ranges from spectra
 - 🔗 **Combine** – Merge multiple spectra along the time or frequency axis
 - 📊 **Plot** – Generate publication-ready dynamic spectrum visualizations
+- ⚠️ **Error Handling** – Custom exceptions for robust error management
 
 ---
 
@@ -48,7 +53,7 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 ### From Source (Development)
 
 ```bash
-git clone https://github.com/yourusername/ecallisto-fits.git
+git clone https://github.com/saandev/ecallisto-fits.git
 cd ecallisto-fits
 pip install -e .
 ```
@@ -182,6 +187,68 @@ print(cleaned.meta["noise_reduction"])
 2. Clip values to the specified range
 3. Apply optional scaling factor
 
+#### Background Subtraction Only
+
+If you want to visualize the result before clipping is applied:
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Apply only background subtraction (no clipping)
+bg_subtracted = ecf.background_subtract(spectrum)
+
+# This is equivalent to the first step of noise_reduce_mean_clip
+# Each frequency channel now has zero mean
+```
+
+---
+
+### Cropping & Slicing
+
+Extract specific frequency or time ranges from a spectrum:
+
+#### Crop by Physical Values
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Crop to specific frequency range (in MHz)
+cropped = ecf.crop_frequency(spectrum, freq_min=100, freq_max=300)
+
+# Crop to specific time range (in seconds)
+cropped = ecf.crop_time(spectrum, time_min=10, time_max=60)
+
+# Crop both axes at once
+cropped = ecf.crop(spectrum, freq_range=(100, 300), time_range=(10, 60))
+```
+
+#### Slice by Array Index
+
+```python
+# Get first 100 frequency channels
+sliced = ecf.slice_by_index(spectrum, freq_slice=slice(0, 100))
+
+# Get every other time sample (downsampling)
+sliced = ecf.slice_by_index(spectrum, time_slice=slice(None, None, 2))
+
+# Combine slices
+sliced = ecf.slice_by_index(spectrum, freq_slice=slice(50, 150), time_slice=slice(0, 500))
+```
+
+#### Cropping Preserves Metadata
+
+```python
+cropped = ecf.crop(spectrum, freq_range=(100, 200))
+
+# Check what was cropped
+print(cropped.meta["cropped"])
+# {'frequency': {'min': 100, 'max': 200}}
+```
+
 ---
 
 ### Combining Spectra
@@ -232,7 +299,7 @@ if ecf.can_combine_time(files):
 
 ### Plotting
 
-Create dynamic spectrum visualizations:
+Create dynamic spectrum visualizations with full customization:
 
 ```python
 import ecallisto_fits as ecf
@@ -245,14 +312,86 @@ cleaned = ecf.noise_reduce_mean_clip(spectrum)
 fig, ax, im = ecf.plot_dynamic_spectrum(cleaned, title="Solar Radio Observation")
 plt.show()
 
-# Customized plot
+# Customized plot with clipping values, colormap, and figure size
 fig, ax, im = ecf.plot_dynamic_spectrum(
     cleaned,
     title="Type III Solar Burst",
-    cmap="viridis",         # Matplotlib colormap
-    show_colorbar=True      # Include colorbar
+    cmap="magma",            # Matplotlib colormap
+    vmin=-5,                  # Colormap lower bound
+    vmax=20,                  # Colormap upper bound
+    figsize=(12, 6),          # Figure size in inches
+    interpolation="bilinear"  # Any matplotlib imshow kwarg
 )
 plt.savefig("spectrum.png", dpi=150, bbox_inches="tight")
+```
+
+#### Plotting Raw Data
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Plot raw spectrum without any processing
+fig, ax, im = ecf.plot_raw_spectrum(
+    spectrum,
+    title="Raw Spectrum",
+    cmap="viridis",
+    figsize=(10, 5)
+)
+```
+
+#### Plotting Background Subtracted (Before Clipping)
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Plot after background subtraction but before clipping
+fig, ax, im = ecf.plot_background_subtracted(
+    spectrum,
+    vmin=-10,
+    vmax=30,
+    cmap="RdBu_r"  # Diverging colormap for +/- values
+)
+```
+
+#### Time Axis Formats
+
+Display time in seconds or Universal Time (UT):
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Default: time in seconds
+ecf.plot_dynamic_spectrum(spectrum, time_format="seconds")
+
+# Time in UT format (HH:MM:SS)
+ecf.plot_dynamic_spectrum(spectrum, time_format="ut")
+```
+
+#### Time Axis Converter
+
+Convert between elapsed seconds and UT time programmatically:
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Create converter from spectrum metadata
+converter = ecf.TimeAxisConverter.from_dynamic_spectrum(spectrum)
+
+# Convert seconds to UT
+print(converter.seconds_to_ut(100))    # "12:01:40"
+print(converter.seconds_to_ut(3661))   # "13:01:01"
+
+# Convert UT to seconds
+print(converter.ut_to_seconds("12:01:40"))  # 100.0
+print(converter.ut_to_seconds("13:00:00"))  # 3600.0
 ```
 
 #### Using a Custom Axes
@@ -266,11 +405,12 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 spectrum1 = ecf.read_fits("file1.fit.gz")
 spectrum2 = ecf.read_fits("file2.fit.gz")
 
-ecf.plot_dynamic_spectrum(spectrum1, ax=axes[0], title="Before Processing")
+ecf.plot_raw_spectrum(spectrum1, ax=axes[0], title="Raw")
 ecf.plot_dynamic_spectrum(
     ecf.noise_reduce_mean_clip(spectrum2), 
     ax=axes[1], 
-    title="After Processing"
+    title="Noise Reduced",
+    vmin=-5, vmax=20
 )
 
 plt.tight_layout()
@@ -384,6 +524,72 @@ Apply noise reduction via mean subtraction and clipping.
 
 ---
 
+#### `background_subtract(ds) -> DynamicSpectrum`
+
+Subtract mean over time for each frequency channel (background subtraction only, no clipping).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+
+**Returns:** New `DynamicSpectrum` with background subtracted. Useful for visualizing data before clipping is applied.
+
+---
+
+### Cropping Functions
+
+#### `crop_frequency(ds, freq_min=None, freq_max=None) -> DynamicSpectrum`
+
+Crop a spectrum to a frequency range.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `freq_min` | `float \| None` | Minimum frequency in MHz (inclusive) |
+| `freq_max` | `float \| None` | Maximum frequency in MHz (inclusive) |
+
+**Raises:** `CropError` if range is invalid or results in empty data.
+
+---
+
+#### `crop_time(ds, time_min=None, time_max=None) -> DynamicSpectrum`
+
+Crop a spectrum to a time range.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `time_min` | `float \| None` | Minimum time in seconds |
+| `time_max` | `float \| None` | Maximum time in seconds |
+
+**Raises:** `CropError` if range is invalid or results in empty data.
+
+---
+
+#### `crop(ds, freq_range=None, time_range=None) -> DynamicSpectrum`
+
+Crop a spectrum along both axes at once.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `freq_range` | `tuple \| None` | `(min, max)` frequency in MHz |
+| `time_range` | `tuple \| None` | `(min, max)` time in seconds |
+
+---
+
+#### `slice_by_index(ds, freq_slice=None, time_slice=None) -> DynamicSpectrum`
+
+Slice a spectrum by array indices.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+| `freq_slice` | `slice \| None` | Slice for frequency axis |
+| `time_slice` | `slice \| None` | Slice for time axis |
+
+---
+
 ### Combine Functions
 
 #### `can_combine_frequency(path1, path2, time_atol=0.01) -> bool`
@@ -412,19 +618,88 @@ Concatenate spectra horizontally (time concatenation).
 
 ### Plotting Functions
 
-#### `plot_dynamic_spectrum(ds, title="...", cmap="inferno", ax=None, show_colorbar=True)`
+#### `plot_dynamic_spectrum(ds, title="...", cmap="inferno", figsize=None, vmin=None, vmax=None, ax=None, show_colorbar=True, time_format="seconds", **imshow_kwargs)`
 
-Plot a dynamic spectrum.
+Plot a dynamic spectrum with full customization.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `ds` | `DynamicSpectrum` | — | Spectrum to plot |
 | `title` | `str` | `"Dynamic Spectrum"` | Plot title |
 | `cmap` | `str` | `"inferno"` | Matplotlib colormap |
+| `figsize` | `tuple \| None` | `None` | Figure size as `(width, height)` in inches |
+| `vmin` | `float \| None` | `None` | Colormap lower bound (clipping) |
+| `vmax` | `float \| None` | `None` | Colormap upper bound (clipping) |
 | `ax` | `Axes \| None` | `None` | Existing axes (creates new if `None`) |
 | `show_colorbar` | `bool` | `True` | Whether to display colorbar |
+| `time_format` | `str` | `"seconds"` | `"seconds"` or `"ut"` for time axis format |
+| `**imshow_kwargs` | — | — | Additional kwargs passed to `matplotlib.imshow()` |
 
 **Returns:** Tuple of `(fig, ax, im)`.
+
+---
+
+#### `plot_raw_spectrum(ds, title="Raw Spectrum", cmap="viridis", ...)`
+
+Plot raw spectrum data without any processing. Accepts the same parameters as `plot_dynamic_spectrum`.
+
+---
+
+#### `plot_background_subtracted(ds, title="Background Subtracted", cmap="RdBu_r", ...)`
+
+Plot spectrum after background subtraction (before clipping). Automatically applies `background_subtract()` and plots the result. Accepts the same parameters as `plot_dynamic_spectrum`.
+
+---
+
+#### `TimeAxisConverter`
+
+Convert between elapsed seconds and UT time.
+
+```python
+@dataclass
+class TimeAxisConverter:
+    ut_start_sec: float  # UT observation start in seconds since midnight
+```
+
+| Method | Description |
+|--------|-------------|
+| `seconds_to_ut(seconds)` | Convert elapsed seconds to UT string (HH:MM:SS) |
+| `ut_to_seconds(ut_str)` | Convert UT string to elapsed seconds |
+| `from_dynamic_spectrum(ds)` | Create converter from spectrum metadata |
+
+---
+
+### Exceptions
+
+The library provides a hierarchy of custom exceptions for robust error handling:
+
+| Exception | Description |
+|-----------|-------------|
+| `ECallistoError` | Base exception for all library errors |
+| `InvalidFITSError` | Raised when a FITS file is invalid or cannot be read |
+| `InvalidFilenameError` | Raised when a filename doesn't match e-CALLISTO naming convention |
+| `DownloadError` | Raised when downloading files from the archive fails |
+| `CombineError` | Raised when spectra cannot be combined |
+| `CropError` | Raised when cropping parameters are invalid |
+
+#### Error Handling Example
+
+```python
+import ecallisto_fits as ecf
+from ecallisto_fits import InvalidFITSError, CropError
+
+try:
+    spectrum = ecf.read_fits("corrupted_file.fit")
+except FileNotFoundError:
+    print("File not found")
+except InvalidFITSError as e:
+    print(f"Invalid FITS file: {e}")
+
+try:
+    cropped = ecf.crop(spectrum, freq_range=(1000, 2000))  # Out of range
+except CropError as e:
+    print(f"Cropping failed: {e}")
+```
 
 ---
 
