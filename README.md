@@ -220,7 +220,7 @@ spectrum = ecl.read_fits("my_spectrum.fit.gz")
 cropped = ecl.crop_frequency(spectrum, freq_min=100, freq_max=300)
 
 # Crop to specific time range (in seconds)
-cropped = ecf.crop_time(spectrum, time_min=10, time_max=60)
+cropped = ecl.crop_time(spectrum, time_min=10, time_max=60)
 
 # Crop both axes at once
 cropped = ecl.crop(spectrum, freq_range=(100, 300), time_range=(10, 60))
@@ -305,15 +305,15 @@ Create dynamic spectrum visualizations with full customization:
 import ecallistolib as ecl
 import matplotlib.pyplot as plt
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
-cleaned = ecf.noise_reduce_mean_clip(spectrum)
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+cleaned = ecl.noise_reduce_mean_clip(spectrum)
 
 # Basic plot
-fig, ax, im = ecf.plot_dynamic_spectrum(cleaned, title="Solar Radio Observation")
+fig, ax, im = ecl.plot_dynamic_spectrum(cleaned, title="Solar Radio Observation")
 plt.show()
 
 # Customized plot with clipping values, colormap, and figure size
-fig, ax, im = ecf.plot_dynamic_spectrum(
+fig, ax, im = ecl.plot_dynamic_spectrum(
     cleaned,
     title="Type III Solar Burst",
     cmap="magma",            # Matplotlib colormap
@@ -328,12 +328,12 @@ plt.savefig("spectrum.png", dpi=150, bbox_inches="tight")
 #### Plotting Raw Data
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Plot raw spectrum without any processing
-fig, ax, im = ecf.plot_raw_spectrum(
+fig, ax, im = ecl.plot_raw_spectrum(
     spectrum,
     title="Raw Spectrum",
     cmap="viridis",
@@ -344,12 +344,12 @@ fig, ax, im = ecf.plot_raw_spectrum(
 #### Plotting Background Subtracted (Before Clipping)
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Plot after background subtraction but before clipping
-fig, ax, im = ecf.plot_background_subtracted(
+fig, ax, im = ecl.plot_background_subtracted(
     spectrum,
     vmin=-10,
     vmax=30,
@@ -362,15 +362,15 @@ fig, ax, im = ecf.plot_background_subtracted(
 Display time in seconds or Universal Time (UT):
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Default: time in seconds
-ecf.plot_dynamic_spectrum(spectrum, time_format="seconds")
+ecl.plot_dynamic_spectrum(spectrum, time_format="seconds")
 
 # Time in UT format (HH:MM:SS)
-ecf.plot_dynamic_spectrum(spectrum, time_format="ut")
+ecl.plot_dynamic_spectrum(spectrum, time_format="ut")
 ```
 
 #### Time Axis Converter
@@ -378,12 +378,12 @@ ecf.plot_dynamic_spectrum(spectrum, time_format="ut")
 Convert between elapsed seconds and UT time programmatically:
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Create converter from spectrum metadata
-converter = ecf.TimeAxisConverter.from_dynamic_spectrum(spectrum)
+converter = ecl.TimeAxisConverter.from_dynamic_spectrum(spectrum)
 
 # Convert seconds to UT
 print(converter.seconds_to_ut(100))    # "12:01:40"
@@ -398,16 +398,16 @@ print(converter.ut_to_seconds("13:00:00"))  # 3600.0
 
 ```python
 import matplotlib.pyplot as plt
-import ecallistolib as ecf
+import ecallistolib as ecl
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-spectrum1 = ecf.read_fits("file1.fit.gz")
-spectrum2 = ecf.read_fits("file2.fit.gz")
+spectrum1 = ecl.read_fits("file1.fit.gz")
+spectrum2 = ecl.read_fits("file2.fit.gz")
 
-ecf.plot_raw_spectrum(spectrum1, ax=axes[0], title="Raw")
-ecf.plot_dynamic_spectrum(
-    ecf.noise_reduce_mean_clip(spectrum2), 
+ecl.plot_raw_spectrum(spectrum1, ax=axes[0], title="Raw")
+ecl.plot_dynamic_spectrum(
+    ecl.noise_reduce_mean_clip(spectrum2), 
     ax=axes[1], 
     title="Noise Reduced",
     vmin=-5, vmax=20
@@ -685,18 +685,18 @@ The library provides a hierarchy of custom exceptions for robust error handling:
 #### Error Handling Example
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 from ecallistolib import InvalidFITSError, CropError
 
 try:
-    spectrum = ecf.read_fits("corrupted_file.fit")
+    spectrum = ecl.read_fits("corrupted_file.fit")
 except FileNotFoundError:
     print("File not found")
 except InvalidFITSError as e:
     print(f"Invalid FITS file: {e}")
 
 try:
-    cropped = ecf.crop(spectrum, freq_range=(1000, 2000))  # Out of range
+    cropped = ecl.crop(spectrum, freq_range=(1000, 2000))  # Out of range
 except CropError as e:
     print(f"Cropping failed: {e}")
 ```
@@ -709,24 +709,24 @@ except CropError as e:
 
 ```python
 from datetime import date
-import ecallistolib as ecf
+import ecallistolib as ecl
 import matplotlib.pyplot as plt
 
 # 1. Download data
-remote = ecf.list_remote_fits(date(2023, 6, 15), hour=12, station_substring="alaska")
-paths = ecf.download_files(remote[:2], out_dir="./data")
+remote = ecl.list_remote_fits(date(2023, 6, 15), hour=12, station_substring="alaska")
+paths = ecl.download_files(remote[:2], out_dir="./data")
 
 # 2. Read and combine
-if ecf.can_combine_time(paths):
-    spectrum = ecf.combine_time(paths)
+if ecl.can_combine_time(paths):
+    spectrum = ecl.combine_time(paths)
 else:
-    spectrum = ecf.read_fits(paths[0])
+    spectrum = ecl.read_fits(paths[0])
 
 # 3. Process
-cleaned = ecf.noise_reduce_mean_clip(spectrum)
+cleaned = ecl.noise_reduce_mean_clip(spectrum)
 
 # 4. Plot
-fig, ax, im = ecf.plot_dynamic_spectrum(
+fig, ax, im = ecl.plot_dynamic_spectrum(
     cleaned,
     title=f"e-CALLISTO Observation - {spectrum.meta.get('station', 'Unknown')}",
     cmap="plasma"
@@ -738,9 +738,9 @@ plt.show()
 ### Working with Metadata
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_file.fit.gz")
+spectrum = ecl.read_fits("my_file.fit.gz")
 
 # Access metadata
 print(f"Station: {spectrum.meta.get('station')}")
@@ -748,7 +748,7 @@ print(f"Date: {spectrum.meta.get('date')}")
 print(f"UT Start: {spectrum.meta.get('ut_start_sec')} seconds")
 
 # After processing, metadata is preserved and extended
-processed = ecf.noise_reduce_mean_clip(spectrum)
+processed = ecl.noise_reduce_mean_clip(spectrum)
 print(f"Processing applied: {processed.meta.get('noise_reduction')}")
 ```
 
