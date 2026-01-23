@@ -50,6 +50,12 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ## Installation
 
+
+### From PyPI (Stable)
+
+```bash
+pip install ecallistolib
+```
 ### From Source (Development)
 
 ```bash
