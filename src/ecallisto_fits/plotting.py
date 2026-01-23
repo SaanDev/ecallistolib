@@ -56,7 +56,7 @@ class TimeAxisConverter:
         hours = int(total_sec // 3600) % 24
         minutes = int((total_sec % 3600) // 60)
         secs = int(total_sec % 60)
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        return f"{hours:02d}:{minutes:02d}"
 
     def ut_to_seconds(self, ut_str: str) -> float:
         """
@@ -144,9 +144,17 @@ def _format_time_axis(
         ax.set_xlabel("Time [s]")
 
 
+def _get_filename_title(ds: DynamicSpectrum, suffix: str) -> str:
+    """Generate plot title from DynamicSpectrum source filename."""
+    if ds.source is not None:
+        filename = ds.source.stem  # Get filename without extension
+        return f"{filename}_{suffix}"
+    return suffix
+
+
 def plot_raw_spectrum(
     ds: DynamicSpectrum,
-    title: str = "Raw Spectrum",
+    title: str | None = None,
     cmap: str = "viridis",
     figsize: tuple[float, float] | None = None,
     vmin: float | None = None,
@@ -209,19 +217,23 @@ def plot_raw_spectrum(
         vmax=vmax,
         **imshow_kwargs,
     )
+    # Use filename-based title if not provided
+    if title is None:
+        title = _get_filename_title(ds, "raw")
     ax.set_title(title)
     _format_time_axis(ax, converter, time_format)
     ax.set_ylabel("Frequency [MHz]")
 
     if show_colorbar:
-        fig.colorbar(im, ax=ax)
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label("Intensity [DN]")
 
     return fig, ax, im
 
 
 def plot_dynamic_spectrum(
     ds: DynamicSpectrum,
-    title: str = "Dynamic Spectrum",
+    title: str | None = None,
     cmap: str = "inferno",
     figsize: tuple[float, float] | None = None,
     vmin: float | None = None,
@@ -300,20 +312,24 @@ def plot_dynamic_spectrum(
         vmax=vmax,
         **imshow_kwargs,
     )
+    # Use filename-based title if not provided
+    if title is None:
+        title = _get_filename_title(ds, "dynamic_spectrum")
     ax.set_title(title)
     _format_time_axis(ax, converter, time_format)
     ax.set_ylabel("Frequency [MHz]")
 
     if show_colorbar:
-        fig.colorbar(im, ax=ax)
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label("Intensity [DN]")
 
     return fig, ax, im
 
 
 def plot_background_subtracted(
     ds: DynamicSpectrum,
-    title: str = "Background Subtracted",
-    cmap: str = "RdBu_r",
+    title: str | None = None,
+    cmap: str = "jet",
     figsize: tuple[float, float] | None = None,
     vmin: float | None = None,
     vmax: float | None = None,
@@ -366,6 +382,9 @@ def plot_background_subtracted(
     from .processing import background_subtract
 
     ds_bg = background_subtract(ds)
+    # Use filename-based title if not provided
+    if title is None:
+        title = _get_filename_title(ds, "background_subtracted")
     return plot_dynamic_spectrum(
         ds_bg,
         title=title,

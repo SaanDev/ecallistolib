@@ -1,8 +1,11 @@
+LICENSE
 README.md
 pyproject.toml
 src/ecallisto_fits/__init__.py
 src/ecallisto_fits/combine.py
+src/ecallisto_fits/crop.py
 src/ecallisto_fits/download.py
+src/ecallisto_fits/exceptions.py
 src/ecallisto_fits/io.py
 src/ecallisto_fits/models.py
 src/ecallisto_fits/plotting.py
@@ -12,7 +15,12 @@ src/ecallisto_fits.egg-info/SOURCES.txt
 src/ecallisto_fits.egg-info/dependency_links.txt
 src/ecallisto_fits.egg-info/requires.txt
 src/ecallisto_fits.egg-info/top_level.txt
+tests/test_crop.py
+tests/test_exceptions.py
 tests/test_imports.py
+tests/test_integration.py
 tests/test_io.py
+tests/test_models.py
+tests/test_plotting.py
 tests/test_processing.py
 tests/test_smoke.py

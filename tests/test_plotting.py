@@ -39,14 +39,14 @@ class TestTimeAxisConverter:
 
     def test_seconds_to_ut_basic(self):
         converter = TimeAxisConverter(ut_start_sec=43200.0)  # 12:00:00
-        assert converter.seconds_to_ut(0) == "12:00:00"
-        assert converter.seconds_to_ut(100) == "12:01:40"
-        assert converter.seconds_to_ut(3661) == "13:01:01"
+        assert converter.seconds_to_ut(0) == "12:00"
+        assert converter.seconds_to_ut(100) == "12:01"
+        assert converter.seconds_to_ut(3661) == "13:01"
 
     def test_seconds_to_ut_wrap_around(self):
         converter = TimeAxisConverter(ut_start_sec=86000.0)  # 23:53:20
         result = converter.seconds_to_ut(1000)  # Should wrap around midnight
-        assert result == "00:10:00"
+        assert result == "00:10"
 
     def test_ut_to_seconds_basic(self):
         converter = TimeAxisConverter(ut_start_sec=43200.0)  # 12:00:00
@@ -135,7 +135,7 @@ class TestPlotRawSpectrum:
     def test_basic_plot(self, sample_ds):
         fig, ax, im = plot_raw_spectrum(sample_ds)
         assert fig is not None
-        assert ax.get_title() == "Raw Spectrum"
+        assert ax.get_title() == "raw"  # No source file, uses suffix only
         plt.close(fig)
 
     def test_default_cmap(self, sample_ds):
@@ -164,13 +164,13 @@ class TestPlotBackgroundSubtracted:
     def test_basic_plot(self, sample_ds):
         fig, ax, im = plot_background_subtracted(sample_ds)
         assert fig is not None
-        assert ax.get_title() == "Background Subtracted"
+        assert ax.get_title() == "background_subtracted"  # No source file
         plt.close(fig)
 
     def test_default_cmap(self, sample_ds):
         fig, ax, im = plot_background_subtracted(sample_ds)
         # Default is diverging colormap
-        assert im.get_cmap().name == "RdBu_r"
+        assert im.get_cmap().name == "jet"
         plt.close(fig)
 
     def test_custom_params(self, sample_ds):
