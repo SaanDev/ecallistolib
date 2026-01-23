@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tests.conftest import create_sample_fits
+from conftest import create_sample_fits
 
 import ecallisto_fits as ecf
 from ecallisto_fits.exceptions import InvalidFITSError
