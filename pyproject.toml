@@ -24,3 +24,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[project.urls]
+Homepage = "https://github.com/saandev/ecallistolib"
+Issues = "https://github.com/saandev/ecallistolib/issues"

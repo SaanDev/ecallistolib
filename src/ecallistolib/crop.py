@@ -1,4 +1,9 @@
-"""Cropping and slicing utilities for DynamicSpectrum objects."""
+"""
+e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
+Version 0.2.1
+Sahan S Liyanage (sahanslst@gmail.com)
+Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
+"""
 
 from __future__ import annotations
 
