@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from ecallisto_fits.models import DynamicSpectrum
+from ecallistolib.models import DynamicSpectrum
 
 
 @pytest.fixture

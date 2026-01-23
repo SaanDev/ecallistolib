@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from ecallisto_fits.crop import crop, crop_frequency, crop_time, slice_by_index
-from ecallisto_fits.exceptions import CropError
-from ecallisto_fits.models import DynamicSpectrum
+from ecallistolib.crop import crop, crop_frequency, crop_time, slice_by_index
+from ecallistolib.exceptions import CropError
+from ecallistolib.models import DynamicSpectrum
 
 
 @pytest.fixture

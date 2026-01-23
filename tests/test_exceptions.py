@@ -2,7 +2,7 @@
 
 import pytest
 
-from ecallisto_fits.exceptions import (
+from ecallistolib.exceptions import (
     CombineError,
     CropError,
     DownloadError,

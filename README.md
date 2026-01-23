@@ -1,4 +1,4 @@
-# ecallisto-fits
+# ecallistolib
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -53,8 +53,8 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 ### From Source (Development)
 
 ```bash
-git clone https://github.com/saandev/ecallisto-fits.git
-cd ecallisto-fits
+git clone https://github.com/saandev/ecallistolib.git
+cd ecallistolib
 pip install -e .
 ```
 
@@ -78,7 +78,7 @@ pip install -e ".[download,plot]"
 ## Quick Start
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 # Read a FITS file
 spectrum = ecf.read_fits("ALASKA_20230101_120000_01.fit.gz")
@@ -99,7 +99,7 @@ fig, ax, im = ecf.plot_dynamic_spectrum(cleaned, title="Solar Radio Burst")
 The library can read standard e-CALLISTO FITS files:
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 # Read a single FITS file
 spectrum = ecf.read_fits("path/to/STATION_YYYYMMDD_HHMMSS_NN.fit.gz")
@@ -133,7 +133,7 @@ Download FITS files directly from the e-CALLISTO archive:
 
 ```python
 from datetime import date
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 # List available files for a specific day, hour, and station
 remote_files = ecf.list_remote_fits(
@@ -162,7 +162,7 @@ for path in saved_paths:
 Apply mean-subtraction and clipping to enhance signal visibility:
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -192,7 +192,7 @@ print(cleaned.meta["noise_reduction"])
 If you want to visualize the result before clipping is applied:
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -212,7 +212,7 @@ Extract specific frequency or time ranges from a spectrum:
 #### Crop by Physical Values
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -258,7 +258,7 @@ print(cropped.meta["cropped"])
 Combine two spectra from the same observation but different frequency bands (e.g., focus 01 and 02):
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 # Check if files can be combined
 if ecf.can_combine_frequency("file_01.fit.gz", "file_02.fit.gz"):
@@ -276,7 +276,7 @@ if ecf.can_combine_frequency("file_01.fit.gz", "file_02.fit.gz"):
 Concatenate multiple spectra recorded consecutively:
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 files = [
     "ALASKA_20230615_140000_01.fit.gz",
@@ -302,7 +302,7 @@ if ecf.can_combine_time(files):
 Create dynamic spectrum visualizations with full customization:
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 import matplotlib.pyplot as plt
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
@@ -328,7 +328,7 @@ plt.savefig("spectrum.png", dpi=150, bbox_inches="tight")
 #### Plotting Raw Data
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -344,7 +344,7 @@ fig, ax, im = ecf.plot_raw_spectrum(
 #### Plotting Background Subtracted (Before Clipping)
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -362,7 +362,7 @@ fig, ax, im = ecf.plot_background_subtracted(
 Display time in seconds or Universal Time (UT):
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -378,7 +378,7 @@ ecf.plot_dynamic_spectrum(spectrum, time_format="ut")
 Convert between elapsed seconds and UT time programmatically:
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
 
@@ -398,7 +398,7 @@ print(converter.ut_to_seconds("13:00:00"))  # 3600.0
 
 ```python
 import matplotlib.pyplot as plt
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -685,8 +685,8 @@ The library provides a hierarchy of custom exceptions for robust error handling:
 #### Error Handling Example
 
 ```python
-import ecallisto_fits as ecf
-from ecallisto_fits import InvalidFITSError, CropError
+import ecallistolib as ecf
+from ecallistolib import InvalidFITSError, CropError
 
 try:
     spectrum = ecf.read_fits("corrupted_file.fit")
@@ -709,7 +709,7 @@ except CropError as e:
 
 ```python
 from datetime import date
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 import matplotlib.pyplot as plt
 
 # 1. Download data
@@ -738,7 +738,7 @@ plt.show()
 ### Working with Metadata
 
 ```python
-import ecallisto_fits as ecf
+import ecallistolib as ecf
 
 spectrum = ecf.read_fits("my_file.fit.gz")
 

@@ -3,8 +3,8 @@
 import pytest
 from pathlib import Path
 
-from ecallisto_fits.io import parse_callisto_filename, CallistoFileParts
-from ecallisto_fits.exceptions import InvalidFilenameError
+from ecallistolib.io import parse_callisto_filename, CallistoFileParts
+from ecallistolib.exceptions import InvalidFilenameError
 
 
 class TestParseCallistoFilename:

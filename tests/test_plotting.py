@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 import matplotlib.pyplot as plt
 
-from ecallisto_fits.models import DynamicSpectrum
-from ecallisto_fits.plotting import (
+from ecallistolib.models import DynamicSpectrum
+from ecallistolib.plotting import (
     TimeAxisConverter,
     plot_dynamic_spectrum,
     plot_raw_spectrum,

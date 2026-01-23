@@ -1,2 +1,2 @@
 def test_combine_module_imports():
-    import ecallisto_fits.combine  # noqa: F401
+    import ecallistolib.combine  # noqa: F401

@@ -8,8 +8,8 @@ import pytest
 
 from conftest import create_sample_fits
 
-import ecallisto_fits as ecf
-from ecallisto_fits.exceptions import InvalidFITSError
+import ecallistolib as ecf
+from ecallistolib.exceptions import InvalidFITSError
 
 
 @pytest.fixture

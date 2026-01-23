@@ -1,6 +1,6 @@
 import numpy as np
-from ecallisto_fits.models import DynamicSpectrum
-from ecallisto_fits.processing import noise_reduce_mean_clip, background_subtract
+from ecallistolib.models import DynamicSpectrum
+from ecallistolib.processing import noise_reduce_mean_clip, background_subtract
 
 def test_noise_reduce_mean_clip_basic():
     data = np.array([[1, 2, 3], [10, 10, 10]], dtype=float)  # (freq, time)
