@@ -187,6 +187,22 @@ print(cleaned.meta["noise_reduction"])
 2. Clip values to the specified range
 3. Apply optional scaling factor
 
+#### Background Subtraction Only
+
+If you want to visualize the result before clipping is applied:
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Apply only background subtraction (no clipping)
+bg_subtracted = ecf.background_subtract(spectrum)
+
+# This is equivalent to the first step of noise_reduce_mean_clip
+# Each frequency channel now has zero mean
+```
+
 ---
 
 ### Cropping & Slicing
@@ -283,7 +299,7 @@ if ecf.can_combine_time(files):
 
 ### Plotting
 
-Create dynamic spectrum visualizations:
+Create dynamic spectrum visualizations with full customization:
 
 ```python
 import ecallisto_fits as ecf
@@ -296,14 +312,86 @@ cleaned = ecf.noise_reduce_mean_clip(spectrum)
 fig, ax, im = ecf.plot_dynamic_spectrum(cleaned, title="Solar Radio Observation")
 plt.show()
 
-# Customized plot
+# Customized plot with clipping values, colormap, and figure size
 fig, ax, im = ecf.plot_dynamic_spectrum(
     cleaned,
     title="Type III Solar Burst",
-    cmap="viridis",         # Matplotlib colormap
-    show_colorbar=True      # Include colorbar
+    cmap="magma",            # Matplotlib colormap
+    vmin=-5,                  # Colormap lower bound
+    vmax=20,                  # Colormap upper bound
+    figsize=(12, 6),          # Figure size in inches
+    interpolation="bilinear"  # Any matplotlib imshow kwarg
 )
 plt.savefig("spectrum.png", dpi=150, bbox_inches="tight")
+```
+
+#### Plotting Raw Data
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Plot raw spectrum without any processing
+fig, ax, im = ecf.plot_raw_spectrum(
+    spectrum,
+    title="Raw Spectrum",
+    cmap="viridis",
+    figsize=(10, 5)
+)
+```
+
+#### Plotting Background Subtracted (Before Clipping)
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Plot after background subtraction but before clipping
+fig, ax, im = ecf.plot_background_subtracted(
+    spectrum,
+    vmin=-10,
+    vmax=30,
+    cmap="RdBu_r"  # Diverging colormap for +/- values
+)
+```
+
+#### Time Axis Formats
+
+Display time in seconds or Universal Time (UT):
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Default: time in seconds
+ecf.plot_dynamic_spectrum(spectrum, time_format="seconds")
+
+# Time in UT format (HH:MM:SS)
+ecf.plot_dynamic_spectrum(spectrum, time_format="ut")
+```
+
+#### Time Axis Converter
+
+Convert between elapsed seconds and UT time programmatically:
+
+```python
+import ecallisto_fits as ecf
+
+spectrum = ecf.read_fits("my_spectrum.fit.gz")
+
+# Create converter from spectrum metadata
+converter = ecf.TimeAxisConverter.from_dynamic_spectrum(spectrum)
+
+# Convert seconds to UT
+print(converter.seconds_to_ut(100))    # "12:01:40"
+print(converter.seconds_to_ut(3661))   # "13:01:01"
+
+# Convert UT to seconds
+print(converter.ut_to_seconds("12:01:40"))  # 100.0
+print(converter.ut_to_seconds("13:00:00"))  # 3600.0
 ```
 
 #### Using a Custom Axes
@@ -317,11 +405,12 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 spectrum1 = ecf.read_fits("file1.fit.gz")
 spectrum2 = ecf.read_fits("file2.fit.gz")
 
-ecf.plot_dynamic_spectrum(spectrum1, ax=axes[0], title="Before Processing")
+ecf.plot_raw_spectrum(spectrum1, ax=axes[0], title="Raw")
 ecf.plot_dynamic_spectrum(
     ecf.noise_reduce_mean_clip(spectrum2), 
     ax=axes[1], 
-    title="After Processing"
+    title="Noise Reduced",
+    vmin=-5, vmax=20
 )
 
 plt.tight_layout()
@@ -435,6 +524,18 @@ Apply noise reduction via mean subtraction and clipping.
 
 ---
 
+#### `background_subtract(ds) -> DynamicSpectrum`
+
+Subtract mean over time for each frequency channel (background subtraction only, no clipping).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+
+**Returns:** New `DynamicSpectrum` with background subtracted. Useful for visualizing data before clipping is applied.
+
+---
+
 ### Cropping Functions
 
 #### `crop_frequency(ds, freq_min=None, freq_max=None) -> DynamicSpectrum`
@@ -517,19 +618,54 @@ Concatenate spectra horizontally (time concatenation).
 
 ### Plotting Functions
 
-#### `plot_dynamic_spectrum(ds, title="...", cmap="inferno", ax=None, show_colorbar=True)`
+#### `plot_dynamic_spectrum(ds, title="...", cmap="inferno", figsize=None, vmin=None, vmax=None, ax=None, show_colorbar=True, time_format="seconds", **imshow_kwargs)`
 
-Plot a dynamic spectrum.
+Plot a dynamic spectrum with full customization.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `ds` | `DynamicSpectrum` | — | Spectrum to plot |
 | `title` | `str` | `"Dynamic Spectrum"` | Plot title |
 | `cmap` | `str` | `"inferno"` | Matplotlib colormap |
+| `figsize` | `tuple \| None` | `None` | Figure size as `(width, height)` in inches |
+| `vmin` | `float \| None` | `None` | Colormap lower bound (clipping) |
+| `vmax` | `float \| None` | `None` | Colormap upper bound (clipping) |
 | `ax` | `Axes \| None` | `None` | Existing axes (creates new if `None`) |
 | `show_colorbar` | `bool` | `True` | Whether to display colorbar |
+| `time_format` | `str` | `"seconds"` | `"seconds"` or `"ut"` for time axis format |
+| `**imshow_kwargs` | — | — | Additional kwargs passed to `matplotlib.imshow()` |
 
 **Returns:** Tuple of `(fig, ax, im)`.
+
+---
+
+#### `plot_raw_spectrum(ds, title="Raw Spectrum", cmap="viridis", ...)`
+
+Plot raw spectrum data without any processing. Accepts the same parameters as `plot_dynamic_spectrum`.
+
+---
+
+#### `plot_background_subtracted(ds, title="Background Subtracted", cmap="RdBu_r", ...)`
+
+Plot spectrum after background subtraction (before clipping). Automatically applies `background_subtract()` and plots the result. Accepts the same parameters as `plot_dynamic_spectrum`.
+
+---
+
+#### `TimeAxisConverter`
+
+Convert between elapsed seconds and UT time.
+
+```python
+@dataclass
+class TimeAxisConverter:
+    ut_start_sec: float  # UT observation start in seconds since midnight
+```
+
+| Method | Description |
+|--------|-------------|
+| `seconds_to_ut(seconds)` | Convert elapsed seconds to UT string (HH:MM:SS) |
+| `ut_to_seconds(ut_str)` | Convert UT string to elapsed seconds |
+| `from_dynamic_spectrum(ds)` | Create converter from spectrum metadata |
 
 ---
 

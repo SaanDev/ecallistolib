@@ -31,3 +31,33 @@ def noise_reduce_mean_clip(
         "scale": scale,
     }
     return ds.copy_with(data=data, meta=meta)
+
+
+def background_subtract(ds: DynamicSpectrum) -> DynamicSpectrum:
+    """
+    Subtract mean over time for each frequency channel (background subtraction only).
+
+    This is the first step of noise reduction without clipping, useful for
+    visualizing the intermediate result before applying clipping.
+
+    Parameters
+    ----------
+    ds : DynamicSpectrum
+        Input dynamic spectrum.
+
+    Returns
+    -------
+    DynamicSpectrum
+        New spectrum with background (mean per frequency) subtracted.
+
+    Example
+    -------
+    >>> ds_bg = background_subtract(ds)
+    >>> plot_dynamic_spectrum(ds_bg, title="Background Subtracted")
+    """
+    data = np.array(ds.data, copy=True, dtype=float)
+    data = data - data.mean(axis=1, keepdims=True)
+
+    meta = dict(ds.meta)
+    meta["processing"] = {"method": "background_subtract"}
+    return ds.copy_with(data=data, meta=meta)
