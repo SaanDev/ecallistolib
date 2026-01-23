@@ -8,7 +8,7 @@ import pytest
 
 from conftest import create_sample_fits
 
-import ecallistolib as ecf
+import ecallistolib as ecl
 from ecallistolib.exceptions import InvalidFITSError
 
 
@@ -37,7 +37,7 @@ class TestReadFitsIntegration:
 
     def test_read_sample_fits(self, sample_fits_file):
         """Test reading a sample FITS file."""
-        ds = ecf.read_fits(sample_fits_file)
+        ds = ecl.read_fits(sample_fits_file)
 
         assert ds.data.shape == (50, 100)
         assert len(ds.freqs_mhz) == 50
@@ -46,7 +46,7 @@ class TestReadFitsIntegration:
 
     def test_read_fits_metadata(self, sample_fits_file):
         """Test that metadata is extracted correctly."""
-        ds = ecf.read_fits(sample_fits_file)
+        ds = ecl.read_fits(sample_fits_file)
 
         assert ds.meta.get("station") == "SAMPLE"
         assert ds.meta.get("date") == "20240101"
@@ -56,7 +56,7 @@ class TestReadFitsIntegration:
     def test_read_fits_file_not_found(self):
         """Test reading non-existent file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError):
-            ecf.read_fits("/nonexistent/path/file.fit")
+            ecl.read_fits("/nonexistent/path/file.fit")
 
 
 class TestProcessingIntegration:
@@ -64,8 +64,8 @@ class TestProcessingIntegration:
 
     def test_noise_reduce_integration(self, sample_fits_file):
         """Test noise reduction on real data."""
-        ds = ecf.read_fits(sample_fits_file)
-        processed = ecf.noise_reduce_mean_clip(ds)
+        ds = ecl.read_fits(sample_fits_file)
+        processed = ecl.noise_reduce_mean_clip(ds)
 
         # Should have same shape
         assert processed.shape == ds.shape
@@ -82,22 +82,22 @@ class TestCroppingIntegration:
 
     def test_crop_frequency_integration(self, sample_fits_file):
         """Test cropping frequency on real data."""
-        ds = ecf.read_fits(sample_fits_file)
+        ds = ecl.read_fits(sample_fits_file)
         original_shape = ds.shape
 
         # Crop to middle frequencies
-        cropped = ecf.crop_frequency(ds, 100, 400)
+        cropped = ecl.crop_frequency(ds, 100, 400)
 
         assert cropped.shape[0] < original_shape[0]
         assert cropped.shape[1] == original_shape[1]
 
     def test_crop_time_integration(self, sample_fits_file):
         """Test cropping time on real data."""
-        ds = ecf.read_fits(sample_fits_file)
+        ds = ecl.read_fits(sample_fits_file)
         original_shape = ds.shape
 
         # Crop to first half of time
-        cropped = ecf.crop_time(ds, 0, 450)
+        cropped = ecl.crop_time(ds, 0, 450)
 
         assert cropped.shape[0] == original_shape[0]
         assert cropped.shape[1] < original_shape[1]
@@ -105,13 +105,13 @@ class TestCroppingIntegration:
     def test_full_workflow(self, sample_fits_file):
         """Test complete workflow: read -> crop -> process."""
         # Read
-        ds = ecf.read_fits(sample_fits_file)
+        ds = ecl.read_fits(sample_fits_file)
 
         # Crop
-        cropped = ecf.crop(ds, freq_range=(100, 400), time_range=(0, 450))
+        cropped = ecl.crop(ds, freq_range=(100, 400), time_range=(0, 450))
 
         # Process
-        processed = ecf.noise_reduce_mean_clip(cropped)
+        processed = ecl.noise_reduce_mean_clip(cropped)
 
         # Verify
         assert processed.shape[0] <= ds.shape[0]
@@ -133,7 +133,7 @@ class TestCombineIntegration:
         create_sample_fits(f2, n_freq=50, n_time=100)
 
         # Combine
-        combined = ecf.combine_time([f1, f2])
+        combined = ecl.combine_time([f1, f2])
 
         # Should have double the time samples
         assert combined.shape[1] == 200
@@ -149,4 +149,4 @@ class TestExceptionIntegration:
         bad_file.write_text("not a fits file")
 
         with pytest.raises(InvalidFITSError):
-            ecf.read_fits(bad_file)
+            ecl.read_fits(bad_file)

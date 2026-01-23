@@ -78,16 +78,16 @@ pip install -e ".[download,plot]"
 ## Quick Start
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
 # Read a FITS file
-spectrum = ecf.read_fits("ALASKA_20230101_120000_01.fit.gz")
+spectrum = ecl.read_fits("ALASKA_20230101_120000_01.fit.gz")
 
 # Apply noise reduction
-cleaned = ecf.noise_reduce_mean_clip(spectrum)
+cleaned = ecl.noise_reduce_mean_clip(spectrum)
 
 # Plot the result
-fig, ax, im = ecf.plot_dynamic_spectrum(cleaned, title="Solar Radio Burst")
+fig, ax, im = ecl.plot_dynamic_spectrum(cleaned, title="Solar Radio Burst")
 ```
 
 ---
@@ -99,10 +99,10 @@ fig, ax, im = ecf.plot_dynamic_spectrum(cleaned, title="Solar Radio Burst")
 The library can read standard e-CALLISTO FITS files:
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
 # Read a single FITS file
-spectrum = ecf.read_fits("path/to/STATION_YYYYMMDD_HHMMSS_NN.fit.gz")
+spectrum = ecl.read_fits("path/to/STATION_YYYYMMDD_HHMMSS_NN.fit.gz")
 
 # Access the data
 print(f"Data shape: {spectrum.shape}")          # (n_freq, n_time)
@@ -117,7 +117,7 @@ print(f"Metadata: {spectrum.meta}")             # Station, date, etc.
 Extract metadata from e-CALLISTO filenames:
 
 ```python
-parts = ecf.parse_callisto_filename("ALASKA_20230615_143000_01.fit.gz")
+parts = ecl.parse_callisto_filename("ALASKA_20230615_143000_01.fit.gz")
 
 print(parts.station)        # "ALASKA"
 print(parts.date_yyyymmdd)  # "20230615"
@@ -133,10 +133,10 @@ Download FITS files directly from the e-CALLISTO archive:
 
 ```python
 from datetime import date
-import ecallistolib as ecf
+import ecallistolib as ecl
 
 # List available files for a specific day, hour, and station
-remote_files = ecf.list_remote_fits(
+remote_files = ecl.list_remote_fits(
     day=date(2023, 6, 15),
     hour=14,                    # UTC hour (0-23)
     station_substring="alaska"  # Case-insensitive station filter
@@ -147,7 +147,7 @@ for rf in remote_files:
     print(f"  - {rf.name}: {rf.url}")
 
 # Download the files
-saved_paths = ecf.download_files(remote_files, out_dir="./data")
+saved_paths = ecl.download_files(remote_files, out_dir="./data")
 
 for path in saved_paths:
     print(f"Downloaded: {path}")
@@ -162,15 +162,15 @@ for path in saved_paths:
 Apply mean-subtraction and clipping to enhance signal visibility:
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Apply noise reduction with default parameters
-cleaned = ecf.noise_reduce_mean_clip(spectrum)
+cleaned = ecl.noise_reduce_mean_clip(spectrum)
 
 # Or customize the parameters
-cleaned = ecf.noise_reduce_mean_clip(
+cleaned = ecl.noise_reduce_mean_clip(
     spectrum,
     clip_low=-5.0,              # Lower clipping threshold
     clip_high=20.0,             # Upper clipping threshold
@@ -192,12 +192,12 @@ print(cleaned.meta["noise_reduction"])
 If you want to visualize the result before clipping is applied:
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Apply only background subtraction (no clipping)
-bg_subtracted = ecf.background_subtract(spectrum)
+bg_subtracted = ecl.background_subtract(spectrum)
 
 # This is equivalent to the first step of noise_reduce_mean_clip
 # Each frequency channel now has zero mean
@@ -212,37 +212,37 @@ Extract specific frequency or time ranges from a spectrum:
 #### Crop by Physical Values
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
-spectrum = ecf.read_fits("my_spectrum.fit.gz")
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
 # Crop to specific frequency range (in MHz)
-cropped = ecf.crop_frequency(spectrum, freq_min=100, freq_max=300)
+cropped = ecl.crop_frequency(spectrum, freq_min=100, freq_max=300)
 
 # Crop to specific time range (in seconds)
 cropped = ecf.crop_time(spectrum, time_min=10, time_max=60)
 
 # Crop both axes at once
-cropped = ecf.crop(spectrum, freq_range=(100, 300), time_range=(10, 60))
+cropped = ecl.crop(spectrum, freq_range=(100, 300), time_range=(10, 60))
 ```
 
 #### Slice by Array Index
 
 ```python
 # Get first 100 frequency channels
-sliced = ecf.slice_by_index(spectrum, freq_slice=slice(0, 100))
+sliced = ecl.slice_by_index(spectrum, freq_slice=slice(0, 100))
 
 # Get every other time sample (downsampling)
-sliced = ecf.slice_by_index(spectrum, time_slice=slice(None, None, 2))
+sliced = ecl.slice_by_index(spectrum, time_slice=slice(None, None, 2))
 
 # Combine slices
-sliced = ecf.slice_by_index(spectrum, freq_slice=slice(50, 150), time_slice=slice(0, 500))
+sliced = ecl.slice_by_index(spectrum, freq_slice=slice(50, 150), time_slice=slice(0, 500))
 ```
 
 #### Cropping Preserves Metadata
 
 ```python
-cropped = ecf.crop(spectrum, freq_range=(100, 200))
+cropped = ecl.crop(spectrum, freq_range=(100, 200))
 
 # Check what was cropped
 print(cropped.meta["cropped"])
@@ -258,11 +258,11 @@ print(cropped.meta["cropped"])
 Combine two spectra from the same observation but different frequency bands (e.g., focus 01 and 02):
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
 # Check if files can be combined
-if ecf.can_combine_frequency("file_01.fit.gz", "file_02.fit.gz"):
-    combined = ecf.combine_frequency("file_01.fit.gz", "file_02.fit.gz")
+if ecl.can_combine_frequency("file_01.fit.gz", "file_02.fit.gz"):
+    combined = ecl.combine_frequency("file_01.fit.gz", "file_02.fit.gz")
     print(f"Combined shape: {combined.shape}")
 ```
 
@@ -276,7 +276,7 @@ if ecf.can_combine_frequency("file_01.fit.gz", "file_02.fit.gz"):
 Concatenate multiple spectra recorded consecutively:
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 
 files = [
     "ALASKA_20230615_140000_01.fit.gz",
@@ -285,8 +285,8 @@ files = [
 ]
 
 # Check compatibility
-if ecf.can_combine_time(files):
-    combined = ecf.combine_time(files)
+if ecl.can_combine_time(files):
+    combined = ecl.combine_time(files)
     print(f"Combined shape: {combined.shape}")
     print(f"Total duration: {combined.time_s[-1] - combined.time_s[0]:.1f} seconds")
 ```
@@ -302,7 +302,7 @@ if ecf.can_combine_time(files):
 Create dynamic spectrum visualizations with full customization:
 
 ```python
-import ecallistolib as ecf
+import ecallistolib as ecl
 import matplotlib.pyplot as plt
 
 spectrum = ecf.read_fits("my_spectrum.fit.gz")
