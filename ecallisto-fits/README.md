@@ -53,7 +53,7 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 ### From Source (Development)
 
 ```bash
-git clone https://github.com/yourusername/ecallisto-fits.git
+git clone https://github.com/saandev/ecallisto-fits.git
 cd ecallisto-fits
 pip install -e .
 ```
