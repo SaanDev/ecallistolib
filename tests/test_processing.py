@@ -1,3 +1,10 @@
+"""
+e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
+Version 0.2.1
+Sahan S Liyanage (sahanslst@gmail.com)
+Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
+"""
+
 import numpy as np
 from ecallistolib.models import DynamicSpectrum
 from ecallistolib.processing import noise_reduce_mean_clip, background_subtract

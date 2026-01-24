@@ -1,4 +1,9 @@
-"""Utility to generate sample FITS data for testing."""
+"""
+e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
+Version 0.2.1
+Sahan S Liyanage (sahanslst@gmail.com)
+Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
+"""
 
 from pathlib import Path
 
