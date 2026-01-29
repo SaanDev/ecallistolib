@@ -1,7 +1,7 @@
 
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.1
+Version 0.2.2
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
