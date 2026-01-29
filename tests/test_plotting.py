@@ -1,6 +1,6 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.2
+Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -13,11 +13,13 @@ import pytest
 import matplotlib.pyplot as plt
 
 from ecallistolib.models import DynamicSpectrum
+from ecallistolib.exceptions import FrequencyOutOfRangeError
 from ecallistolib.plotting import (
     TimeAxisConverter,
     plot_dynamic_spectrum,
     plot_raw_spectrum,
     plot_background_subtracted,
+    plot_light_curve,
 )
 
 
@@ -89,10 +91,35 @@ class TestPlotDynamicSpectrum:
         assert fig.get_figheight() == 6
         plt.close(fig)
 
-    def test_custom_vmin_vmax(self, sample_ds):
-        fig, ax, im = plot_dynamic_spectrum(sample_ds, vmin=10, vmax=90)
+    def test_custom_clip_low_clip_high(self, sample_ds):
+        fig, ax, im = plot_dynamic_spectrum(sample_ds, clip_low=10, clip_high=90)
         assert im.get_clim() == (10, 90)
         plt.close(fig)
+
+    def test_process_raw(self, sample_ds):
+        """Test raw process mode."""
+        fig, ax, im = plot_dynamic_spectrum(sample_ds, process="raw")
+        assert fig is not None
+        plt.close(fig)
+
+    def test_process_background_subtracted(self, sample_ds):
+        """Test background-subtracted process mode."""
+        fig, ax, im = plot_dynamic_spectrum(sample_ds, process="background_subtracted")
+        assert fig is not None
+        plt.close(fig)
+
+    def test_process_noise_reduced(self, sample_ds):
+        """Test noise-reduced process mode."""
+        fig, ax, im = plot_dynamic_spectrum(
+            sample_ds, process="noise_reduced", clip_low=-5, clip_high=20
+        )
+        assert fig is not None
+        plt.close(fig)
+
+    def test_noise_reduced_requires_clip_values(self, sample_ds):
+        """Test ValueError is raised when noise_reduced without clip values."""
+        with pytest.raises(ValueError, match="clip_low and clip_high must be provided"):
+            plot_dynamic_spectrum(sample_ds, process="noise_reduced")
 
     def test_custom_cmap(self, sample_ds):
         fig, ax, im = plot_dynamic_spectrum(sample_ds, cmap="magma")
@@ -155,8 +182,8 @@ class TestPlotRawSpectrum:
             title="My Raw",
             cmap="plasma",
             figsize=(10, 5),
-            vmin=0,
-            vmax=50,
+            clip_low=0,
+            clip_high=50,
         )
         assert ax.get_title() == "My Raw"
         assert im.get_cmap().name == "plasma"
@@ -181,7 +208,124 @@ class TestPlotBackgroundSubtracted:
 
     def test_custom_params(self, sample_ds):
         fig, ax, im = plot_background_subtracted(
-            sample_ds, vmin=-20, vmax=20, figsize=(8, 4)
+            sample_ds, clip_low=-20, clip_high=20, figsize=(8, 4)
         )
         assert im.get_clim() == (-20, 20)
+        plt.close(fig)
+
+
+class TestPlotLightCurve:
+    """Tests for plot_light_curve function."""
+
+    def test_basic_plot(self, sample_ds):
+        """Test basic plotting works and returns expected objects."""
+        fig, ax, line = plot_light_curve(sample_ds, frequency_mhz=150)
+        assert fig is not None
+        assert ax is not None
+        assert line is not None
+        plt.close(fig)
+
+    def test_frequency_out_of_range_below(self, sample_ds):
+        """Test FrequencyOutOfRangeError is raised for frequency below range."""
+        with pytest.raises(FrequencyOutOfRangeError, match="outside"):
+            plot_light_curve(sample_ds, frequency_mhz=50)  # Below 100 MHz
+
+    def test_frequency_out_of_range_above(self, sample_ds):
+        """Test FrequencyOutOfRangeError is raised for frequency above range."""
+        with pytest.raises(FrequencyOutOfRangeError, match="outside"):
+            plot_light_curve(sample_ds, frequency_mhz=300)  # Above 200 MHz
+
+    def test_process_raw(self, sample_ds):
+        """Test raw data plotting."""
+        fig, ax, line = plot_light_curve(sample_ds, frequency_mhz=150, process="raw")
+        assert fig is not None
+        plt.close(fig)
+
+    def test_process_background_subtracted(self, sample_ds):
+        """Test background-subtracted plotting."""
+        fig, ax, line = plot_light_curve(
+            sample_ds, frequency_mhz=150, process="background_subtracted"
+        )
+        assert fig is not None
+        plt.close(fig)
+
+    def test_process_noise_reduced(self, sample_ds):
+        """Test noise-reduced plotting with clip values."""
+        fig, ax, line = plot_light_curve(
+            sample_ds,
+            frequency_mhz=150,
+            process="noise_reduced",
+            clip_low=-5,
+            clip_high=20,
+        )
+        assert fig is not None
+        plt.close(fig)
+
+    def test_noise_reduced_missing_clip_values(self, sample_ds):
+        """Test ValueError is raised when noise_reduced without clip values."""
+        with pytest.raises(ValueError, match="clip_low and clip_high must be provided"):
+            plot_light_curve(sample_ds, frequency_mhz=150, process="noise_reduced")
+
+    def test_noise_reduced_missing_clip_low(self, sample_ds):
+        """Test ValueError is raised when only clip_high is provided."""
+        with pytest.raises(ValueError, match="clip_low and clip_high must be provided"):
+            plot_light_curve(
+                sample_ds, frequency_mhz=150, process="noise_reduced", clip_high=20
+            )
+
+    def test_time_format_ut(self, sample_ds):
+        """Test UT time axis formatting."""
+        fig, ax, line = plot_light_curve(
+            sample_ds, frequency_mhz=150, time_format="ut"
+        )
+        assert "ut" in ax.get_xlabel().lower()
+        plt.close(fig)
+
+    def test_time_format_seconds(self, sample_ds):
+        """Test seconds time axis formatting."""
+        fig, ax, line = plot_light_curve(
+            sample_ds, frequency_mhz=150, time_format="seconds"
+        )
+        assert "s" in ax.get_xlabel().lower()
+        plt.close(fig)
+
+    def test_custom_figsize(self, sample_ds):
+        """Test figure size customization."""
+        fig, ax, line = plot_light_curve(sample_ds, frequency_mhz=150, figsize=(12, 6))
+        assert fig.get_figwidth() == 12
+        assert fig.get_figheight() == 6
+        plt.close(fig)
+
+    def test_custom_title(self, sample_ds):
+        """Test custom title."""
+        fig, ax, line = plot_light_curve(
+            sample_ds, frequency_mhz=150, title="Custom LC Title"
+        )
+        assert ax.get_title() == "Custom LC Title"
+        plt.close(fig)
+
+    def test_existing_axes(self, sample_ds):
+        """Test plotting on provided axes."""
+        fig, ax = plt.subplots()
+        fig2, ax2, line = plot_light_curve(sample_ds, frequency_mhz=150, ax=ax)
+        assert ax2 is ax
+        assert fig2 is fig
+        plt.close(fig)
+
+    def test_plot_kwargs(self, sample_ds):
+        """Test extra kwargs are passed to matplotlib plot."""
+        fig, ax, line = plot_light_curve(
+            sample_ds, frequency_mhz=150, color="red", linewidth=2
+        )
+        assert line.get_color() == "red"
+        assert line.get_linewidth() == 2
+        plt.close(fig)
+
+    def test_finds_closest_frequency(self, sample_ds):
+        """Test that the function finds the closest frequency channel."""
+        # sample_ds has frequencies from 100 to 200 in 10 steps
+        # Requesting 155 should find closest channel
+        fig, ax, line = plot_light_curve(sample_ds, frequency_mhz=155)
+        # Should not raise any error
+        assert fig is not None
         plt.close(fig)

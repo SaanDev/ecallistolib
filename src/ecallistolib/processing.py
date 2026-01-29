@@ -1,6 +1,6 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.2
+Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -14,8 +14,8 @@ from .models import DynamicSpectrum
 
 def noise_reduce_mean_clip(
     ds: DynamicSpectrum,
-    clip_low: float = -5.0,
-    clip_high: float = 20.0,
+    clip_low: float,
+    clip_high: float,
     scale: float | None = (2500.0 / 255.0 / 25.4),
 ) -> DynamicSpectrum:
     """

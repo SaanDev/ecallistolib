@@ -1,6 +1,6 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.2
+Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -12,6 +12,7 @@ from ecallistolib.exceptions import (
     CropError,
     DownloadError,
     ECallistoError,
+    FrequencyOutOfRangeError,
     InvalidFilenameError,
     InvalidFITSError,
 )
@@ -37,6 +38,9 @@ class TestExceptionHierarchy:
 
     def test_crop_error_inherits_from_base(self):
         assert issubclass(CropError, ECallistoError)
+
+    def test_frequency_out_of_range_error_inherits_from_base(self):
+        assert issubclass(FrequencyOutOfRangeError, ECallistoError)
 
 
 class TestExceptionMessages:
@@ -71,6 +75,7 @@ class TestExceptionCatching:
             DownloadError("c"),
             CombineError("d"),
             CropError("e"),
+            FrequencyOutOfRangeError("f"),
         ]
         for exc in exceptions:
             try:

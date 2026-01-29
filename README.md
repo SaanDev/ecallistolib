@@ -97,11 +97,14 @@ import ecallistolib as ecl
 # Read a FITS file
 spectrum = ecl.read_fits("ALASKA_20230101_120000_01.fit.gz")
 
-# Apply noise reduction
-cleaned = ecl.noise_reduce_mean_clip(spectrum)
-
-# Plot the result
-fig, ax, im = ecl.plot_dynamic_spectrum(cleaned, title="Solar Radio Burst")
+# Plot with different processing modes
+fig, ax, im = ecl.plot_dynamic_spectrum(
+    spectrum, 
+    process="noise_reduced",
+    clip_low=-5, 
+    clip_high=20,
+    title="Solar Radio Burst"
+)
 ```
 
 ---
@@ -180,14 +183,11 @@ import ecallistolib as ecl
 
 spectrum = ecl.read_fits("my_spectrum.fit.gz")
 
-# Apply noise reduction with default parameters
-cleaned = ecl.noise_reduce_mean_clip(spectrum)
-
-# Or customize the parameters
+# Apply noise reduction with required clipping values
 cleaned = ecl.noise_reduce_mean_clip(
     spectrum,
-    clip_low=-5.0,              # Lower clipping threshold
-    clip_high=20.0,             # Upper clipping threshold
+    clip_low=-5.0,              # Lower clipping threshold (required)
+    clip_high=20.0,             # Upper clipping threshold (required)
     scale=2500.0 / 255.0 / 25.4 # Scaling factor (None to disable)
 )
 
@@ -313,28 +313,28 @@ if ecl.can_combine_time(files):
 
 ### Plotting
 
-Create dynamic spectrum visualizations with full customization:
+Create dynamic spectrum visualizations with selectable processing modes:
 
 ```python
 import ecallistolib as ecl
 import matplotlib.pyplot as plt
 
 spectrum = ecl.read_fits("my_spectrum.fit.gz")
-cleaned = ecl.noise_reduce_mean_clip(spectrum)
 
-# Basic plot
-fig, ax, im = ecl.plot_dynamic_spectrum(cleaned, title="Solar Radio Observation")
+# Plot raw spectrum
+fig, ax, im = ecl.plot_dynamic_spectrum(spectrum, process="raw")
 plt.show()
 
-# Customized plot with clipping values, colormap, and figure size
+# Plot noise-reduced spectrum with required clipping values
 fig, ax, im = ecl.plot_dynamic_spectrum(
-    cleaned,
+    spectrum,
+    process="noise_reduced",     # Apply noise reduction
+    clip_low=-5,                  # Lower clipping bound (required)
+    clip_high=20,                 # Upper clipping bound (required)
     title="Type III Solar Burst",
-    cmap="magma",            # Matplotlib colormap
-    vmin=-5,                  # Colormap lower bound
-    vmax=20,                  # Colormap upper bound
-    figsize=(12, 6),          # Figure size in inches
-    interpolation="bilinear"  # Any matplotlib imshow kwarg
+    cmap="magma",
+    figsize=(12, 6),
+    interpolation="bilinear"
 )
 plt.savefig("spectrum.png", dpi=150, bbox_inches="tight")
 ```
@@ -365,8 +365,8 @@ spectrum = ecl.read_fits("my_spectrum.fit.gz")
 # Plot after background subtraction but before clipping
 fig, ax, im = ecl.plot_background_subtracted(
     spectrum,
-    vmin=-10,
-    vmax=30,
+    clip_low=-10,
+    clip_high=30,
     cmap="RdBu_r"  # Diverging colormap for +/- values
 )
 ```
@@ -386,6 +386,24 @@ ecl.plot_dynamic_spectrum(spectrum, time_format="seconds")
 # Time in UT format (HH:MM:SS)
 ecl.plot_dynamic_spectrum(spectrum, time_format="ut")
 ```
+
+#### Intensity Units
+
+Choose between raw digital values (Digits/ADU) or pseudo-calibrated dB:
+
+```python
+import ecallistolib as ecl
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Default: intensity in Digits (raw ADU values)
+ecl.plot_dynamic_spectrum(spectrum, intensity_units="digits")
+
+# Convert to dB using: dB = Digits * 0.384 (pseudo-calibration)
+ecl.plot_dynamic_spectrum(spectrum, intensity_units="dB")
+```
+
+> **Note:** The dB conversion uses the formula: dB = Digits × 2500 / 256 / 25.4 ≈ Digits × 0.384
 
 #### Time Axis Converter
 
@@ -419,12 +437,65 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 spectrum1 = ecl.read_fits("file1.fit.gz")
 spectrum2 = ecl.read_fits("file2.fit.gz")
 
-ecl.plot_raw_spectrum(spectrum1, ax=axes[0], title="Raw")
+ecl.plot_dynamic_spectrum(spectrum1, process="raw", ax=axes[0], title="Raw")
 ecl.plot_dynamic_spectrum(
-    ecl.noise_reduce_mean_clip(spectrum2), 
+    spectrum2, 
+    process="noise_reduced",
     ax=axes[1], 
     title="Noise Reduced",
-    vmin=-5, vmax=20
+    clip_low=-5, clip_high=20
+)
+
+plt.tight_layout()
+plt.show()
+```
+
+#### Light Curve Plotting
+
+Plot intensity vs time at a specific frequency:
+
+```python
+import ecallistolib as ecl
+import matplotlib.pyplot as plt
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Plot raw light curve at 60 MHz
+fig, ax, line = ecl.plot_light_curve(spectrum, frequency_mhz=60, process="raw")
+plt.show()
+
+# Plot background-subtracted light curve
+fig, ax, line = ecl.plot_light_curve(
+    spectrum, frequency_mhz=60, process="background_subtracted"
+)
+plt.show()
+
+# Plot noise-reduced light curve (must provide clip values)
+fig, ax, line = ecl.plot_light_curve(
+    spectrum,
+    frequency_mhz=60,
+    process="noise_reduced",
+    clip_low=-5,
+    clip_high=20
+)
+plt.show()
+```
+
+Compare all three processing modes:
+
+```python
+import ecallistolib as ecl
+import matplotlib.pyplot as plt
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+
+ecl.plot_light_curve(spectrum, 60, process="raw", ax=axes[0], title="Raw")
+ecl.plot_light_curve(spectrum, 60, process="background_subtracted", ax=axes[1], title="BG Sub")
+ecl.plot_light_curve(
+    spectrum, 60, process="noise_reduced", ax=axes[2], title="Noise Reduced",
+    clip_low=-5, clip_high=20
 )
 
 plt.tight_layout()
@@ -632,36 +703,65 @@ Concatenate spectra horizontally (time concatenation).
 
 ### Plotting Functions
 
-#### `plot_dynamic_spectrum(ds, title="...", cmap="inferno", figsize=None, vmin=None, vmax=None, ax=None, show_colorbar=True, time_format="seconds", **imshow_kwargs)`
+#### `plot_dynamic_spectrum(ds, process="raw", clip_low=None, clip_high=None, title=None, cmap="inferno", figsize=None, ax=None, show_colorbar=True, time_format="seconds", intensity_units="digits", **imshow_kwargs)`
 
-Plot a dynamic spectrum with full customization.
+Plot a dynamic spectrum with selectable processing mode.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `ds` | `DynamicSpectrum` | — | Spectrum to plot |
-| `title` | `str` | `"Dynamic Spectrum"` | Plot title |
+| `process` | `str` | `"raw"` | Processing mode: `"raw"`, `"background_subtracted"`, or `"noise_reduced"` |
+| `clip_low` | `float \| None` | `None` | Lower clipping bound (required for `"noise_reduced"`) |
+| `clip_high` | `float \| None` | `None` | Upper clipping bound (required for `"noise_reduced"`) |
+| `title` | `str \| None` | `None` | Plot title (auto-generated if `None`) |
 | `cmap` | `str` | `"inferno"` | Matplotlib colormap |
 | `figsize` | `tuple \| None` | `None` | Figure size as `(width, height)` in inches |
-| `vmin` | `float \| None` | `None` | Colormap lower bound (clipping) |
-| `vmax` | `float \| None` | `None` | Colormap upper bound (clipping) |
 | `ax` | `Axes \| None` | `None` | Existing axes (creates new if `None`) |
 | `show_colorbar` | `bool` | `True` | Whether to display colorbar |
 | `time_format` | `str` | `"seconds"` | `"seconds"` or `"ut"` for time axis format |
+| `intensity_units` | `str` | `"digits"` | `"digits"` (raw ADU) or `"dB"` (pseudo-calibrated) |
 | `**imshow_kwargs` | — | — | Additional kwargs passed to `matplotlib.imshow()` |
 
 **Returns:** Tuple of `(fig, ax, im)`.
 
----
-
-#### `plot_raw_spectrum(ds, title="Raw Spectrum", cmap="viridis", ...)`
-
-Plot raw spectrum data without any processing. Accepts the same parameters as `plot_dynamic_spectrum`.
+**Raises:** `ValueError` if `process="noise_reduced"` without `clip_low` and `clip_high`.
 
 ---
 
-#### `plot_background_subtracted(ds, title="Background Subtracted", cmap="RdBu_r", ...)`
+#### `plot_raw_spectrum(ds, clip_low=None, clip_high=None, title=None, cmap="viridis", ...)`
 
-Plot spectrum after background subtraction (before clipping). Automatically applies `background_subtract()` and plots the result. Accepts the same parameters as `plot_dynamic_spectrum`.
+Convenience function that calls `plot_dynamic_spectrum` with `process="raw"`.
+
+---
+
+#### `plot_background_subtracted(ds, clip_low=None, clip_high=None, title=None, cmap="jet", ...)`
+
+Convenience function that calls `plot_dynamic_spectrum` with `process="background_subtracted"`.
+
+---
+
+#### `plot_light_curve(ds, frequency_mhz, process="raw", title=None, figsize=None, ax=None, time_format="seconds", clip_low=None, clip_high=None, **plot_kwargs)`
+
+Plot a light curve (intensity vs time) at a specific frequency.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ds` | `DynamicSpectrum` | — | Spectrum to extract light curve from |
+| `frequency_mhz` | `float` | — | Target frequency in MHz |
+| `process` | `str` | `"raw"` | Processing mode: `"raw"`, `"background_subtracted"`, or `"noise_reduced"` |
+| `title` | `str \| None` | `None` | Plot title (auto-generated if `None`) |
+| `figsize` | `tuple \| None` | `None` | Figure size as `(width, height)` in inches |
+| `ax` | `Axes \| None` | `None` | Existing axes (creates new if `None`) |
+| `time_format` | `str` | `"seconds"` | `"seconds"` or `"ut"` for time axis format |
+| `clip_low` | `float \| None` | `None` | Lower clip threshold (required for `"noise_reduced"`) |
+| `clip_high` | `float \| None` | `None` | Upper clip threshold (required for `"noise_reduced"`) |
+| `**plot_kwargs` | — | — | Additional kwargs passed to `matplotlib.plot()` |
+
+**Returns:** Tuple of `(fig, ax, line)`.
+
+**Raises:**
+- `FrequencyOutOfRangeError` if frequency is outside spectrum's range.
+- `ValueError` if `process="noise_reduced"` without `clip_low` and `clip_high`.
 
 ---
 
@@ -695,6 +795,7 @@ The library provides a hierarchy of custom exceptions for robust error handling:
 | `DownloadError` | Raised when downloading files from the archive fails |
 | `CombineError` | Raised when spectra cannot be combined |
 | `CropError` | Raised when cropping parameters are invalid |
+| `FrequencyOutOfRangeError` | Raised when the requested frequency is outside the spectrum's range |
 
 #### Error Handling Example
 

@@ -1,6 +1,6 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.2
+Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -70,7 +70,7 @@ class TestProcessingIntegration:
     def test_noise_reduce_integration(self, sample_fits_file):
         """Test noise reduction on real data."""
         ds = ecl.read_fits(sample_fits_file)
-        processed = ecl.noise_reduce_mean_clip(ds)
+        processed = ecl.noise_reduce_mean_clip(ds, clip_low=-5, clip_high=20)
 
         # Should have same shape
         assert processed.shape == ds.shape
@@ -116,7 +116,7 @@ class TestCroppingIntegration:
         cropped = ecl.crop(ds, freq_range=(100, 400), time_range=(0, 450))
 
         # Process
-        processed = ecl.noise_reduce_mean_clip(cropped)
+        processed = ecl.noise_reduce_mean_clip(cropped, clip_low=-5, clip_high=20)
 
         # Verify
         assert processed.shape[0] <= ds.shape[0]

@@ -1,7 +1,7 @@
 
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.2
+Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -14,6 +14,7 @@ from .exceptions import (
     CropError,
     DownloadError,
     ECallistoError,
+    FrequencyOutOfRangeError,
     InvalidFilenameError,
     InvalidFITSError,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "DownloadError",
     "CombineError",
     "CropError",
+    "FrequencyOutOfRangeError",
 ]
 
 
@@ -86,12 +88,14 @@ def __getattr__(name: str):
         "plot_dynamic_spectrum",
         "plot_raw_spectrum",
         "plot_background_subtracted",
+        "plot_light_curve",
         "TimeAxisConverter",
     }:
         from .plotting import (
             TimeAxisConverter,
             plot_background_subtracted,
             plot_dynamic_spectrum,
+            plot_light_curve,
             plot_raw_spectrum,
         )
 
@@ -99,6 +103,7 @@ def __getattr__(name: str):
             "plot_dynamic_spectrum": plot_dynamic_spectrum,
             "plot_raw_spectrum": plot_raw_spectrum,
             "plot_background_subtracted": plot_background_subtracted,
+            "plot_light_curve": plot_light_curve,
             "TimeAxisConverter": TimeAxisConverter,
         }[name]
 
