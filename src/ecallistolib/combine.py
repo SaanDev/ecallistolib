@@ -48,7 +48,7 @@ def combine_frequency(path1: str | Path, path2: str | Path) -> DynamicSpectrum:
 
     meta = dict(ds1.meta)
     meta["combined"] = {"mode": "frequency", "sources": [str(ds1.source), str(ds2.source)]}
-    return DynamicSpectrum(data=data, freqs_mhz=freqs, time_s=ds1.time_s, source=None, meta=meta)
+    return DynamicSpectrum(data=data, freqs_mhz=freqs, time_s=ds1.time_s, source=ds1.source, meta=meta)
 
 
 def can_combine_time(paths: Iterable[str | Path], freq_atol: float = 0.01) -> bool:
@@ -106,5 +106,5 @@ def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
 
     meta = dict(ds0.meta)
     meta["combined"] = {"mode": "time", "sources": [str(Path(p)) for p in paths]}
-    return DynamicSpectrum(data=combined_data, freqs_mhz=freqs, time_s=combined_time, source=None, meta=meta)
+    return DynamicSpectrum(data=combined_data, freqs_mhz=freqs, time_s=combined_time, source=ds0.source, meta=meta)
 
