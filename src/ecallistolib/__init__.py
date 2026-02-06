@@ -20,7 +20,7 @@ from .exceptions import (
 )
 from .io import CallistoFileParts, parse_callisto_filename, read_fits
 from .models import DynamicSpectrum
-from .processing import noise_reduce_mean_clip
+from .processing import noise_reduce_mean_clip, noise_reduce_median_clip
 from .crop import crop, crop_frequency, crop_time, slice_by_index
 
 try:
@@ -39,6 +39,7 @@ __all__ = [
     "read_fits",
     # Processing
     "noise_reduce_mean_clip",
+    "noise_reduce_median_clip",
     # Cropping
     "crop",
     "crop_frequency",
@@ -77,12 +78,14 @@ def __getattr__(name: str):
             "combine_time": combine_time,
         }[name]
 
-    if name in {"list_remote_fits", "download_files"}:
-        from .download import download_files, list_remote_fits
+    if name in {"list_remote_fits", "list_remote_fits_range", "download_files"}:
+        from .download import download_files, list_remote_fits, list_remote_fits_range
 
-        return {"list_remote_fits": list_remote_fits, "download_files": download_files}[
-            name
-        ]
+        return {
+            "list_remote_fits": list_remote_fits,
+            "list_remote_fits_range": list_remote_fits_range,
+            "download_files": download_files,
+        }[name]
 
     if name in {
         "plot_dynamic_spectrum",

@@ -42,3 +42,23 @@ class DynamicSpectrum:
     @property
     def shape(self) -> tuple[int, int]:
         return int(self.data.shape[0]), int(self.data.shape[1])
+
+    @property
+    def n_freq(self) -> int:
+        """Number of frequency channels."""
+        return self.data.shape[0]
+
+    @property
+    def n_time(self) -> int:
+        """Number of time samples."""
+        return self.data.shape[1]
+
+    @property
+    def duration_s(self) -> float:
+        """Total observation duration in seconds."""
+        return float(self.time_s[-1] - self.time_s[0])
+
+    @property
+    def freq_range_mhz(self) -> tuple[float, float]:
+        """Frequency range as (min, max) in MHz."""
+        return float(self.freqs_mhz.min()), float(self.freqs_mhz.max())

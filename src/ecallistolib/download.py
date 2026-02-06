@@ -99,6 +99,81 @@ def list_remote_fits(
     return out
 
 
+def list_remote_fits_range(
+    start_date: date,
+    end_date: date,
+    hours: Iterable[int] | None = None,
+    station_substring: str = "",
+    base_url: str = DEFAULT_BASE_URL,
+    timeout_s: float = 10.0,
+) -> List[RemoteFITS]:
+    """
+    List available FITS files over a date range.
+
+    Parameters
+    ----------
+    start_date : date
+        Start date (inclusive).
+    end_date : date
+        End date (inclusive).
+    hours : Iterable[int] | None
+        UTC hours to include (0-23). If None, includes all hours (0-23).
+    station_substring : str
+        Case-insensitive substring to match station names.
+    base_url : str
+        Base URL of the e-CALLISTO archive.
+    timeout_s : float
+        HTTP request timeout in seconds.
+
+    Returns
+    -------
+    List[RemoteFITS]
+        All matching remote FITS files across the date range.
+
+    Raises
+    ------
+    ValueError
+        If start_date > end_date.
+
+    Example
+    -------
+    >>> from datetime import date
+    >>> files = list_remote_fits_range(
+    ...     start_date=date(2023, 6, 1),
+    ...     end_date=date(2023, 6, 3),
+    ...     hours=[12, 13, 14],
+    ...     station_substring="alaska"
+    ... )
+    """
+    from datetime import timedelta
+
+    if start_date > end_date:
+        raise ValueError("start_date must be <= end_date")
+
+    hours_to_check = list(hours) if hours is not None else list(range(24))
+
+    results: List[RemoteFITS] = []
+    current = start_date
+
+    while current <= end_date:
+        for hour in hours_to_check:
+            try:
+                found = list_remote_fits(
+                    day=current,
+                    hour=hour,
+                    station_substring=station_substring,
+                    base_url=base_url,
+                    timeout_s=timeout_s,
+                )
+                results.extend(found)
+            except DownloadError:
+                # Skip days/hours with no data or connection issues
+                continue
+        current += timedelta(days=1)
+
+    return results
+
+
 def download_files(
     items: Iterable[RemoteFITS],
     out_dir: str | Path,

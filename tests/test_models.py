@@ -89,6 +89,34 @@ class TestDynamicSpectrumShape:
         assert all(isinstance(x, int) for x in shape)
 
 
+class TestDynamicSpectrumConvenienceProperties:
+    """Tests for convenience properties added in v0.3.0."""
+
+    def test_n_freq_property(self, sample_spectrum):
+        """Test n_freq returns number of frequency channels."""
+        assert sample_spectrum.n_freq == 2
+
+    def test_n_time_property(self, sample_spectrum):
+        """Test n_time returns number of time samples."""
+        assert sample_spectrum.n_time == 3
+
+    def test_duration_s_property(self, sample_spectrum):
+        """Test duration_s returns total observation duration."""
+        assert sample_spectrum.duration_s == 2.0
+
+    def test_freq_range_mhz_property(self, sample_spectrum):
+        """Test freq_range_mhz returns (min, max) tuple."""
+        assert sample_spectrum.freq_range_mhz == (100.0, 200.0)
+
+    def test_freq_range_mhz_with_unsorted_freqs(self):
+        """Test freq_range_mhz works with unsorted frequencies."""
+        data = np.zeros((3, 5))
+        freqs = np.array([200.0, 100.0, 150.0])  # Unsorted
+        times = np.arange(5, dtype=float)
+        ds = DynamicSpectrum(data=data, freqs_mhz=freqs, time_s=times)
+        assert ds.freq_range_mhz == (100.0, 200.0)
+
+
 class TestDynamicSpectrumCopyWith:
     """Tests for copy_with method."""
 

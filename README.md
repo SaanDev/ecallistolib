@@ -9,6 +9,14 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ---
 
+## 🆕 What's New in v0.3.0
+
+- **`DynamicSpectrum` convenience properties** — `n_freq`, `n_time`, `duration_s`, `freq_range_mhz` for quick data inspection
+- **`list_remote_fits_range()`** — Query the e-CALLISTO archive across multiple days with optional hour filtering
+- **`noise_reduce_median_clip()`** — Median-based noise reduction, more robust to outliers than mean-based method
+
+---
+
 ## Table of Contents
 
 - [Features](#features)
@@ -127,6 +135,12 @@ print(f"Frequencies: {spectrum.freqs_mhz}")     # Frequency axis in MHz
 print(f"Time samples: {spectrum.time_s}")       # Time axis in seconds
 print(f"Source file: {spectrum.source}")        # Original file path
 print(f"Metadata: {spectrum.meta}")             # Station, date, etc.
+
+# New in v0.3.0: Convenience properties
+print(f"Num frequencies: {spectrum.n_freq}")    # Number of frequency channels
+print(f"Num time samples: {spectrum.n_time}")   # Number of time samples
+print(f"Duration: {spectrum.duration_s} s")     # Total observation duration
+print(f"Freq range: {spectrum.freq_range_mhz}") # (min, max) frequency in MHz
 ```
 
 #### Parsing Filenames
@@ -168,6 +182,25 @@ saved_paths = ecl.download_files(remote_files, out_dir="./data")
 
 for path in saved_paths:
     print(f"Downloaded: {path}")
+```
+
+#### Querying Multiple Days
+
+List files over a date range with `list_remote_fits_range` (new in v0.3.0):
+
+```python
+from datetime import date
+import ecallistolib as ecl
+
+# List files from June 1-3, 2023, during hours 12-14 UTC
+remote_files = ecl.list_remote_fits_range(
+    start_date=date(2023, 6, 1),
+    end_date=date(2023, 6, 3),
+    hours=[12, 13, 14],          # Optional: specific UTC hours
+    station_substring="alaska"
+)
+
+print(f"Found {len(remote_files)} files across 3 days")
 ```
 
 ---
@@ -215,6 +248,26 @@ bg_subtracted = ecl.background_subtract(spectrum)
 
 # This is equivalent to the first step of noise_reduce_mean_clip
 # Each frequency channel now has zero mean
+```
+
+#### Median-Based Noise Reduction (v0.3.0)
+
+For data with outliers, use median-based subtraction which is more robust:
+
+```python
+import ecallistolib as ecl
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Use median instead of mean (more robust to outliers)
+cleaned = ecl.noise_reduce_median_clip(
+    spectrum,
+    clip_low=-5.0,
+    clip_high=20.0
+)
+
+# Metadata shows the method used
+print(cleaned.meta["noise_reduction"]["method"])  # 'median_subtract_clip'
 ```
 
 ---
@@ -525,6 +578,10 @@ class DynamicSpectrum:
 | Property | Type | Description |
 |----------|------|-------------|
 | `shape` | `tuple[int, int]` | Returns `(n_freq, n_time)` |
+| `n_freq` | `int` | Number of frequency channels |
+| `n_time` | `int` | Number of time samples |
+| `duration_s` | `float` | Total observation duration in seconds |
+| `freq_range_mhz` | `tuple[float, float]` | Frequency range as `(min, max)` in MHz |
 
 #### Methods
 
@@ -592,6 +649,21 @@ Download FITS files to a local directory.
 
 ---
 
+#### `list_remote_fits_range(start_date, end_date, hours=None, station_substring="", ...) -> List[RemoteFITS]`
+
+List available FITS files over a date range (new in v0.3.0).
+
+| Parameter | Type | Description |
+|-----------|------|--------------|
+| `start_date` | `date` | Start date (inclusive) |
+| `end_date` | `date` | End date (inclusive) |
+| `hours` | `Iterable[int] \| None` | UTC hours to include (0–23), or None for all |
+| `station_substring` | `str` | Case-insensitive station filter |
+
+**Returns:** List of `RemoteFITS` objects across the date range.
+
+---
+
 ### Processing Functions
 
 #### `noise_reduce_mean_clip(ds, clip_low=-5.0, clip_high=20.0, scale=...) -> DynamicSpectrum`
@@ -618,6 +690,21 @@ Subtract mean over time for each frequency channel (background subtraction only,
 | `ds` | `DynamicSpectrum` | Input spectrum |
 
 **Returns:** New `DynamicSpectrum` with background subtracted. Useful for visualizing data before clipping is applied.
+
+---
+
+#### `noise_reduce_median_clip(ds, clip_low, clip_high, scale=...) -> DynamicSpectrum`
+
+Apply noise reduction via median subtraction and clipping (new in v0.3.0). More robust to outliers than mean-based method.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ds` | `DynamicSpectrum` | — | Input spectrum |
+| `clip_low` | `float` | — | Lower clipping threshold |
+| `clip_high` | `float` | — | Upper clipping threshold |
+| `scale` | `float \| None` | `~3.88` | Scaling factor (`None` to disable) |
+
+**Returns:** New `DynamicSpectrum` with processed data and updated metadata.
 
 ---
 
