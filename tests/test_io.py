@@ -1,6 +1,5 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -27,6 +26,14 @@ class TestParseCallistoFilename:
         """Test station names with hyphens."""
         p = parse_callisto_filename("ALASKA-COHOE_20240101_123000_01.fit.gz")
         assert p.station == "ALASKA-COHOE"
+
+    def test_station_with_underscore(self):
+        """Station names with underscores should be parsed correctly."""
+        p = parse_callisto_filename("STATION_SUB_20240101_123000_01.fit.gz")
+        assert p.station == "STATION_SUB"
+        assert p.date_yyyymmdd == "20240101"
+        assert p.time_hhmmss == "123000"
+        assert p.focus == "01"
 
     def test_different_focus(self):
         """Test different focus/channel numbers."""
@@ -57,6 +64,21 @@ class TestParseCallistoFilename:
         """Test filename with no underscores."""
         with pytest.raises(InvalidFilenameError):
             parse_callisto_filename("invalid.fit")
+
+    def test_invalid_date(self):
+        """Malformed date should raise InvalidFilenameError."""
+        with pytest.raises(InvalidFilenameError, match="date"):
+            parse_callisto_filename("ALASKA_20241301_123000_01.fit.gz")
+
+    def test_invalid_time(self):
+        """Malformed time should raise InvalidFilenameError."""
+        with pytest.raises(InvalidFilenameError, match="time"):
+            parse_callisto_filename("ALASKA_20240101_246000_01.fit.gz")
+
+    def test_invalid_focus(self):
+        """Malformed focus should raise InvalidFilenameError."""
+        with pytest.raises(InvalidFilenameError, match="focus"):
+            parse_callisto_filename("ALASKA_20240101_123000_focus.fit.gz")
 
     def test_returns_callisto_file_parts(self):
         """Test return type is CallistoFileParts."""

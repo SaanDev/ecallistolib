@@ -1,13 +1,13 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union
+from copy import deepcopy
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -67,8 +67,11 @@ def crop_frequency(
     cropped_freqs = freqs[indices]
 
     meta = dict(ds.meta)
-    meta["cropped"] = meta.get("cropped", {})
-    meta["cropped"]["frequency"] = {"min": freq_min, "max": freq_max}
+    cropped_meta = deepcopy(meta.get("cropped", {}))
+    if not isinstance(cropped_meta, dict):
+        cropped_meta = {}
+    cropped_meta["frequency"] = {"min": freq_min, "max": freq_max}
+    meta["cropped"] = cropped_meta
 
     return ds.copy_with(data=cropped_data, freqs_mhz=cropped_freqs, meta=meta)
 
@@ -125,8 +128,11 @@ def crop_time(
     cropped_times = times[indices]
 
     meta = dict(ds.meta)
-    meta["cropped"] = meta.get("cropped", {})
-    meta["cropped"]["time"] = {"min": time_min, "max": time_max}
+    cropped_meta = deepcopy(meta.get("cropped", {}))
+    if not isinstance(cropped_meta, dict):
+        cropped_meta = {}
+    cropped_meta["time"] = {"min": time_min, "max": time_max}
+    meta["cropped"] = cropped_meta
 
     return ds.copy_with(data=cropped_data, time_s=cropped_times, meta=meta)
 

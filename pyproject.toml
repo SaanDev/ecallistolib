@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ecallistolib"
-version = "0.3.0"
+version = "1.0.0"
 description = "Tools to download, read, process, and plot e-CALLISTO FITS dynamic spectra."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,7 +12,8 @@ license = {text = "MIT"}
 authors = [{name = "Sahan S. Liyanage"}]
 dependencies = [
   "numpy>=1.23",
-  "astropy>=5.3",
+  "astropy>=6.1.7; python_version<'3.11'",
+  "astropy>=7.2; python_version>='3.11'",
 ]
 
 [project.optional-dependencies]

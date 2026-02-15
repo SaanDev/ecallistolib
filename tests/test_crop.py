@@ -1,6 +1,5 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -132,6 +131,15 @@ class TestCrop:
         assert result.freqs_mhz.max() <= 180
         assert result.time_s.min() >= 10
         assert result.time_s.max() <= 40
+
+    def test_crop_chaining_does_not_mutate_intermediate_metadata(self, sample_spectrum):
+        """Sequential crops should not mutate previously returned objects."""
+        freq_cropped = crop_frequency(sample_spectrum, 120, 180)
+        assert "time" not in freq_cropped.meta["cropped"]
+
+        _ = crop_time(freq_cropped, 10, 40)
+
+        assert "time" not in freq_cropped.meta["cropped"]
 
     def test_crop_no_arguments(self, sample_spectrum):
         """Crop with no arguments should return equivalent data."""

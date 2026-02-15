@@ -1,6 +1,5 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -50,6 +49,11 @@ class TestTimeAxisConverter:
         assert converter.seconds_to_ut(0) == "12:00"
         assert converter.seconds_to_ut(100) == "12:01"
         assert converter.seconds_to_ut(3661) == "13:01"
+
+    def test_seconds_to_ut_second_precision(self):
+        converter = TimeAxisConverter(ut_start_sec=43200.0)
+        assert converter.seconds_to_ut(100, precision="second") == "12:01:40"
+        assert converter.seconds_to_ut(3661, precision="second") == "13:01:01"
 
     def test_seconds_to_ut_wrap_around(self):
         converter = TimeAxisConverter(ut_start_sec=86000.0)  # 23:53:20

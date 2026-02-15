@@ -1,6 +1,6 @@
 # ecallistolib
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10-3.12](https://img.shields.io/badge/python-3.10--3.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO FITS dynamic spectra.
@@ -9,11 +9,14 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ---
 
-## 🆕 What's New in v0.3.0
+## 🆕 What's New in v1.0.0
 
-- **`DynamicSpectrum` convenience properties** — `n_freq`, `n_time`, `duration_s`, `freq_range_mhz` for quick data inspection
-- **`list_remote_fits_range()`** — Query the e-CALLISTO archive across multiple days with optional hour filtering
-- **`noise_reduce_median_clip()`** — Median-based noise reduction, more robust to outliers than mean-based method
+- **Precision-aware UT conversion** — `TimeAxisConverter.seconds_to_ut(..., precision="minute"|"second")`
+- **More robust downloads** — `list_remote_fits_range(..., error_policy="skip"|"raise")` with one day-fetch per date
+- **Streaming file downloads** — `download_files(..., chunk_size=...)` avoids loading full files in memory
+- **Safer parsing and combining** — stricter filename validation and typed `CombineError` failures for incompatible inputs
+- **Metadata immutability hardening** — copy operations avoid mutating previously returned spectra metadata
+- **Explicit runtime policy** — officially supported Python versions are `3.10-3.12`
 
 ---
 
@@ -52,11 +55,16 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 - ✂️ **Crop** – Extract frequency and time ranges from spectra
 - 🔗 **Combine** – Merge multiple spectra along the time or frequency axis
 - 📊 **Plot** – Generate publication-ready dynamic spectrum visualizations
+- 🕒 **Time Precision Control** – Convert seconds to UT in `HH:MM` or `HH:MM:SS`
+- ⚡ **Efficient I/O** – Stream downloads and optimize multi-day remote listing queries
+- 🛡️ **Reliability Enhancements** – Stricter parsing, typed combine failures, and safer metadata copying
 - ⚠️ **Error Handling** – Custom exceptions for robust error management
 
 ---
 
 ## Installation
+
+Supported Python versions: **3.10-3.12**.
 
 
 ### From PyPI (Stable)
@@ -136,7 +144,7 @@ print(f"Time samples: {spectrum.time_s}")       # Time axis in seconds
 print(f"Source file: {spectrum.source}")        # Original file path
 print(f"Metadata: {spectrum.meta}")             # Station, date, etc.
 
-# New in v0.3.0: Convenience properties
+# New in v1.0.0: Convenience properties
 print(f"Num frequencies: {spectrum.n_freq}")    # Number of frequency channels
 print(f"Num time samples: {spectrum.n_time}")   # Number of time samples
 print(f"Duration: {spectrum.duration_s} s")     # Total observation duration
@@ -186,7 +194,7 @@ for path in saved_paths:
 
 #### Querying Multiple Days
 
-List files over a date range with `list_remote_fits_range` (new in v0.3.0):
+List files over a date range with `list_remote_fits_range` (new in v1.0.0):
 
 ```python
 from datetime import date
@@ -197,10 +205,22 @@ remote_files = ecl.list_remote_fits_range(
     start_date=date(2023, 6, 1),
     end_date=date(2023, 6, 3),
     hours=[12, 13, 14],          # Optional: specific UTC hours
-    station_substring="alaska"
+    station_substring="alaska",
+    error_policy="skip"          # "skip" (default) or "raise"
 )
 
 print(f"Found {len(remote_files)} files across 3 days")
+```
+
+Error handling behavior can be configured:
+
+```python
+# Raise immediately if any day listing fails:
+remote_files = ecl.list_remote_fits_range(
+    start_date=date(2023, 6, 1),
+    end_date=date(2023, 6, 3),
+    error_policy="raise",
+)
 ```
 
 ---
@@ -250,7 +270,7 @@ bg_subtracted = ecl.background_subtract(spectrum)
 # Each frequency channel now has zero mean
 ```
 
-#### Median-Based Noise Reduction (v0.3.0)
+#### Median-Based Noise Reduction (v1.0.0)
 
 For data with outliers, use median-based subtraction which is more robust:
 
@@ -436,7 +456,7 @@ spectrum = ecl.read_fits("my_spectrum.fit.gz")
 # Default: time in seconds
 ecl.plot_dynamic_spectrum(spectrum, time_format="seconds")
 
-# Time in UT format (HH:MM:SS)
+# Time in UT format (HH:MM)
 ecl.plot_dynamic_spectrum(spectrum, time_format="ut")
 ```
 
@@ -470,9 +490,13 @@ spectrum = ecl.read_fits("my_spectrum.fit.gz")
 # Create converter from spectrum metadata
 converter = ecl.TimeAxisConverter.from_dynamic_spectrum(spectrum)
 
-# Convert seconds to UT
-print(converter.seconds_to_ut(100))    # "12:01:40"
-print(converter.seconds_to_ut(3661))   # "13:01:01"
+# Convert seconds to UT (default minute precision)
+print(converter.seconds_to_ut(100))    # "12:01"
+print(converter.seconds_to_ut(3661))   # "13:01"
+
+# Request second precision when needed
+print(converter.seconds_to_ut(100, precision="second"))   # "12:01:40"
+print(converter.seconds_to_ut(3661, precision="second"))  # "13:01:01"
 
 # Convert UT to seconds
 print(converter.ut_to_seconds("12:01:40"))  # 100.0
@@ -635,7 +659,7 @@ List available FITS files from the e-CALLISTO archive.
 
 ---
 
-#### `download_files(items, out_dir, timeout_s=30.0) -> List[Path]`
+#### `download_files(items, out_dir, timeout_s=30.0, chunk_size=1048576) -> List[Path]`
 
 Download FITS files to a local directory.
 
@@ -644,14 +668,15 @@ Download FITS files to a local directory.
 | `items` | `Iterable[RemoteFITS]` | Files to download |
 | `out_dir` | `str \| Path` | Output directory |
 | `timeout_s` | `float` | Request timeout per file |
+| `chunk_size` | `int` | Streaming chunk size in bytes |
 
 **Returns:** List of saved file paths.
 
 ---
 
-#### `list_remote_fits_range(start_date, end_date, hours=None, station_substring="", ...) -> List[RemoteFITS]`
+#### `list_remote_fits_range(start_date, end_date, hours=None, station_substring="", error_policy="skip", ...) -> List[RemoteFITS]`
 
-List available FITS files over a date range (new in v0.3.0).
+List available FITS files over a date range (new in v1.0.0).
 
 | Parameter | Type | Description |
 |-----------|------|--------------|
@@ -659,6 +684,7 @@ List available FITS files over a date range (new in v0.3.0).
 | `end_date` | `date` | End date (inclusive) |
 | `hours` | `Iterable[int] \| None` | UTC hours to include (0–23), or None for all |
 | `station_substring` | `str` | Case-insensitive station filter |
+| `error_policy` | `str` | `"skip"` to continue on failed days, `"raise"` to fail fast |
 
 **Returns:** List of `RemoteFITS` objects across the date range.
 
@@ -695,7 +721,7 @@ Subtract mean over time for each frequency channel (background subtraction only,
 
 #### `noise_reduce_median_clip(ds, clip_low, clip_high, scale=...) -> DynamicSpectrum`
 
-Apply noise reduction via median subtraction and clipping (new in v0.3.0). More robust to outliers than mean-based method.
+Apply noise reduction via median subtraction and clipping (new in v1.0.0). More robust to outliers than mean-based method.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -864,7 +890,7 @@ class TimeAxisConverter:
 
 | Method | Description |
 |--------|-------------|
-| `seconds_to_ut(seconds)` | Convert elapsed seconds to UT string (HH:MM:SS) |
+| `seconds_to_ut(seconds, precision="minute")` | Convert elapsed seconds to UT string (`"minute"` -> HH:MM, `"second"` -> HH:MM:SS) |
 | `ut_to_seconds(ut_str)` | Convert UT string to elapsed seconds |
 | `from_dynamic_spectrum(ds)` | Create converter from spectrum metadata |
 
@@ -925,7 +951,7 @@ else:
     spectrum = ecl.read_fits(paths[0])
 
 # 3. Process
-cleaned = ecl.noise_reduce_mean_clip(spectrum)
+cleaned = ecl.noise_reduce_mean_clip(spectrum, clip_low=-5.0, clip_high=20.0)
 
 # 4. Plot
 fig, ax, im = ecl.plot_dynamic_spectrum(
@@ -950,7 +976,7 @@ print(f"Date: {spectrum.meta.get('date')}")
 print(f"UT Start: {spectrum.meta.get('ut_start_sec')} seconds")
 
 # After processing, metadata is preserved and extended
-processed = ecl.noise_reduce_mean_clip(spectrum)
+processed = ecl.noise_reduce_mean_clip(spectrum, clip_low=-5.0, clip_high=20.0)
 print(f"Processing applied: {processed.meta.get('noise_reduction')}")
 ```
 

@@ -1,12 +1,12 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Optional
@@ -31,12 +31,13 @@ class DynamicSpectrum:
 
     def copy_with(self, **changes: Any) -> "DynamicSpectrum":
         """Return a new DynamicSpectrum with specified fields replaced."""
+        meta = changes["meta"] if "meta" in changes else deepcopy(self.meta)
         return DynamicSpectrum(
             data=changes.get("data", self.data),
             freqs_mhz=changes.get("freqs_mhz", self.freqs_mhz),
             time_s=changes.get("time_s", self.time_s),
             source=changes.get("source", self.source),
-            meta=changes.get("meta", dict(self.meta)),
+            meta=meta,
         )
 
     @property

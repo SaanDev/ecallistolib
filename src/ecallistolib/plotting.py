@@ -1,6 +1,5 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -8,7 +7,7 @@ Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,6 +37,8 @@ class TimeAxisConverter:
     -------
     >>> converter = TimeAxisConverter(ut_start_sec=43200.0)  # 12:00:00
     >>> converter.seconds_to_ut(100)
+    '12:01'
+    >>> converter.seconds_to_ut(100, precision="second")
     '12:01:40'
     >>> converter.ut_to_seconds("12:01:40")
     100.0
@@ -45,25 +46,36 @@ class TimeAxisConverter:
 
     ut_start_sec: float
 
-    def seconds_to_ut(self, seconds: float) -> str:
+    def seconds_to_ut(
+        self,
+        seconds: float,
+        precision: Literal["minute", "second"] = "minute",
+    ) -> str:
         """
-        Convert elapsed seconds to UT time string (HH:MM:SS).
+        Convert elapsed seconds to a UT time string.
 
         Parameters
         ----------
         seconds : float
             Elapsed seconds from observation start.
+        precision : {"minute", "second"}
+            Output precision. "minute" returns HH:MM (default), "second"
+            returns HH:MM:SS.
 
         Returns
         -------
         str
-            UT time string in HH:MM:SS format.
+            UT time string.
         """
         total_sec = self.ut_start_sec + seconds
         hours = int(total_sec // 3600) % 24
         minutes = int((total_sec % 3600) // 60)
         secs = int(total_sec % 60)
-        return f"{hours:02d}:{minutes:02d}"
+        if precision == "minute":
+            return f"{hours:02d}:{minutes:02d}"
+        if precision == "second":
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        raise ValueError("precision must be one of: 'minute', 'second'")
 
     def ut_to_seconds(self, ut_str: str) -> float:
         """
@@ -117,7 +129,7 @@ class TimeAxisConverter:
 def _compute_extent(
     ds: DynamicSpectrum,
     time_format: Literal["seconds", "ut"],
-) -> tuple[list[float], Optional[TimeAxisConverter]]:
+) -> tuple[tuple[float, float, float, float], Optional[TimeAxisConverter]]:
     """Compute imshow extent and optional time converter."""
     converter = None
     if time_format == "ut":
@@ -128,7 +140,7 @@ def _compute_extent(
         t_start = float(ds.time_s[0])
         t_end = float(ds.time_s[-1])
 
-    extent = [t_start, t_end, float(ds.freqs_mhz[-1]), float(ds.freqs_mhz[0])]
+    extent = (t_start, t_end, float(ds.freqs_mhz[-1]), float(ds.freqs_mhz[0]))
     return extent, converter
 
 
@@ -144,7 +156,7 @@ def _format_time_axis(
         from matplotlib.ticker import FuncFormatter
 
         def fmt(x, pos):
-            return converter.seconds_to_ut(x - converter.ut_start_sec)
+            return converter.seconds_to_ut(x - converter.ut_start_sec, precision="minute")
 
         ax.xaxis.set_major_formatter(FuncFormatter(fmt))
     else:
@@ -256,6 +268,8 @@ def plot_dynamic_spectrum(
             raise ValueError(
                 "When process='noise_reduced', both clip_low and clip_high must be provided."
             )
+        assert clip_low is not None
+        assert clip_high is not None
 
     # Apply processing
     if process == "background_subtracted":
@@ -263,7 +277,10 @@ def plot_dynamic_spectrum(
         title_suffix = "background_subtracted"
     elif process == "noise_reduced":
         ds_plot = noise_reduce_mean_clip(
-            ds, clip_low=clip_low, clip_high=clip_high, scale=None
+            ds,
+            clip_low=cast(float, clip_low),
+            clip_high=cast(float, clip_high),
+            scale=None,
         )
         title_suffix = "noise_clipped"
     else:  # raw
@@ -273,7 +290,7 @@ def plot_dynamic_spectrum(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.figure
+        fig = cast("Figure", ax.figure)
 
     extent, converter = _compute_extent(ds, time_format)
 
@@ -547,6 +564,8 @@ def plot_light_curve(
             raise ValueError(
                 "When process='noise_reduced', both clip_low and clip_high must be provided."
             )
+        assert clip_low is not None
+        assert clip_high is not None
 
     # Find the closest frequency channel
     freq_idx = int(np.argmin(np.abs(ds.freqs_mhz - frequency_mhz)))
@@ -557,7 +576,10 @@ def plot_light_curve(
         ds_processed = background_subtract(ds)
     elif process == "noise_reduced":
         ds_processed = noise_reduce_mean_clip(
-            ds, clip_low=clip_low, clip_high=clip_high, scale=None
+            ds,
+            clip_low=cast(float, clip_low),
+            clip_high=cast(float, clip_high),
+            scale=None,
         )
     else:  # raw
         ds_processed = ds
@@ -573,7 +595,7 @@ def plot_light_curve(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.figure
+        fig = cast("Figure", ax.figure)
 
     # Prepare time axis
     if time_format == "ut":
@@ -584,7 +606,7 @@ def plot_light_curve(
         from matplotlib.ticker import FuncFormatter
 
         def fmt(x, pos):
-            return converter.seconds_to_ut(x - converter.ut_start_sec)
+            return converter.seconds_to_ut(x - converter.ut_start_sec, precision="minute")
 
         ax.xaxis.set_major_formatter(FuncFormatter(fmt))
     else:
@@ -615,4 +637,3 @@ def plot_light_curve(
         ax.set_ylabel("Intensity [Digits]")
 
     return fig, ax, line
-

@@ -1,6 +1,5 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -90,7 +89,7 @@ class TestDynamicSpectrumShape:
 
 
 class TestDynamicSpectrumConvenienceProperties:
-    """Tests for convenience properties added in v0.3.0."""
+    """Tests for convenience properties added in v1.0.0."""
 
     def test_n_freq_property(self, sample_spectrum):
         """Test n_freq returns number of frequency channels."""
@@ -156,6 +155,19 @@ class TestDynamicSpectrumCopyWith:
         copy = sample_spectrum.copy_with(meta=new_meta)
 
         assert copy.meta["new_key"] == "new_value"
+
+    def test_copy_with_default_meta_is_deep_copy(self):
+        """Default metadata copy should not share nested mutable objects."""
+        ds = DynamicSpectrum(
+            data=np.zeros((1, 1)),
+            freqs_mhz=np.array([100.0]),
+            time_s=np.array([0.0]),
+            meta={"nested": {"value": 1}},
+        )
+        copied = ds.copy_with()
+        copied.meta["nested"]["value"] = 2
+
+        assert ds.meta["nested"]["value"] == 1
 
     def test_copy_with_multiple_changes(self, sample_spectrum):
         """Copy with multiple changes should update all specified fields."""

@@ -1,6 +1,5 @@
 """
 e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
-Version 0.2.3
 Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
@@ -10,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+import re
+from typing import Optional
 
 import numpy as np
 from astropy.io import fits
@@ -27,6 +27,12 @@ class CallistoFileParts:
     focus: str
 
 
+_DATE_RE = re.compile(r"^\d{8}$")
+_TIME_RE = re.compile(r"^\d{6}$")
+_FOCUS_RE = re.compile(r"^\d+$")
+_KNOWN_SUFFIXES = (".fit.gz", ".fit")
+
+
 def parse_callisto_filename(path: str | Path) -> CallistoFileParts:
     """
     Parse e-CALLISTO style filenames like:
@@ -38,14 +44,34 @@ def parse_callisto_filename(path: str | Path) -> CallistoFileParts:
         If the filename doesn't match the expected format.
     """
     base = Path(path).name
-    parts = base.split("_")
+    stem = base
+    for suffix in _KNOWN_SUFFIXES:
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+
+    parts = stem.split("_")
     if len(parts) < 4:
         raise InvalidFilenameError(f"Invalid CALLISTO filename format: {base}")
 
-    station = parts[0]
-    date_yyyymmdd = parts[1]
-    time_hhmmss = parts[2]
-    focus = parts[3].split(".")[0]
+    station = "_".join(parts[:-3])
+    date_yyyymmdd = parts[-3]
+    time_hhmmss = parts[-2]
+    focus = parts[-1]
+
+    if not station:
+        raise InvalidFilenameError(f"Invalid CALLISTO filename format: {base}")
+    if not _DATE_RE.fullmatch(date_yyyymmdd):
+        raise InvalidFilenameError(f"Invalid date in CALLISTO filename: {base}")
+    if not _TIME_RE.fullmatch(time_hhmmss):
+        raise InvalidFilenameError(f"Invalid time in CALLISTO filename: {base}")
+    if not _FOCUS_RE.fullmatch(focus):
+        raise InvalidFilenameError(f"Invalid focus in CALLISTO filename: {base}")
+    try:
+        datetime.strptime(f"{date_yyyymmdd}{time_hhmmss}", "%Y%m%d%H%M%S")
+    except ValueError as e:
+        raise InvalidFilenameError(f"Invalid date/time in CALLISTO filename: {base}") from e
+
     return CallistoFileParts(station, date_yyyymmdd, time_hhmmss, focus)
 
 
@@ -113,7 +139,7 @@ def read_fits(path: str | Path) -> DynamicSpectrum:
     except OSError as e:
         raise InvalidFITSError(f"Failed to open FITS file: {path}") from e
 
-    meta = {"ut_start_sec": ut_start_sec}
+    meta: dict[str, object] = {"ut_start_sec": ut_start_sec}
     try:
         parts = parse_callisto_filename(path)
         meta |= {
@@ -127,4 +153,3 @@ def read_fits(path: str | Path) -> DynamicSpectrum:
         pass
 
     return DynamicSpectrum(data=data, freqs_mhz=freqs, time_s=time_s, source=path, meta=meta)
-
