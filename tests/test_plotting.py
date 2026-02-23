@@ -122,8 +122,56 @@ class TestPlotDynamicSpectrum:
 
     def test_noise_reduced_requires_clip_values(self, sample_ds):
         """Test ValueError is raised when noise_reduced without clip values."""
-        with pytest.raises(ValueError, match="clip_low and clip_high must be provided"):
+        with pytest.raises(ValueError, match="clip_low/clip_high or clip_percentiles"):
             plot_dynamic_spectrum(sample_ds, process="noise_reduced")
+
+    def test_clip_percentiles_sets_color_limits(self, sample_ds):
+        fig, ax, im = plot_dynamic_spectrum(sample_ds, clip_percentiles=(5, 95))
+        expected_low, expected_high = np.nanpercentile(sample_ds.data, [5, 95])
+        assert im.get_clim() == pytest.approx((expected_low, expected_high))
+        plt.close(fig)
+
+    def test_explicit_clip_overrides_percentiles(self, sample_ds):
+        fig, ax, im = plot_dynamic_spectrum(
+            sample_ds,
+            clip_low=10,
+            clip_high=20,
+            clip_percentiles=(5, 95),
+        )
+        assert im.get_clim() == (10, 20)
+        plt.close(fig)
+
+    def test_invalid_clip_pair_raises(self, sample_ds):
+        with pytest.raises(ValueError, match="clip_low and clip_high must be provided together"):
+            plot_dynamic_spectrum(sample_ds, clip_low=10)
+
+    def test_invalid_clip_percentiles_raise(self, sample_ds):
+        with pytest.raises(ValueError, match="low < high"):
+            plot_dynamic_spectrum(sample_ds, clip_percentiles=(90, 10))
+
+    def test_noise_reduced_with_clip_percentiles(self, sample_ds):
+        from ecallistolib.processing import background_subtract
+
+        fig, ax, im = plot_dynamic_spectrum(
+            sample_ds,
+            process="noise_reduced",
+            clip_percentiles=(10, 90),
+        )
+        bg_data = background_subtract(sample_ds).data
+        expected_low, expected_high = np.nanpercentile(bg_data, [10, 90])
+        assert im.get_clim() == pytest.approx((expected_low, expected_high))
+        plt.close(fig)
+
+    def test_save_path_writes_figure(self, sample_ds, tmp_path):
+        out = tmp_path / "dynamic.png"
+        fig, ax, im = plot_dynamic_spectrum(
+            sample_ds,
+            save_path=out,
+            savefig_kwargs={"dpi": 80},
+        )
+        assert out.exists()
+        assert out.stat().st_size > 0
+        plt.close(fig)
 
     def test_custom_cmap(self, sample_ds):
         fig, ax, im = plot_dynamic_spectrum(sample_ds, cmap="magma")
@@ -194,6 +242,13 @@ class TestPlotRawSpectrum:
         assert im.get_clim() == (0, 50)
         plt.close(fig)
 
+    def test_save_path_writes_figure(self, sample_ds, tmp_path):
+        out = tmp_path / "raw.png"
+        fig, ax, im = plot_raw_spectrum(sample_ds, save_path=out)
+        assert out.exists()
+        assert out.stat().st_size > 0
+        plt.close(fig)
+
 
 class TestPlotBackgroundSubtracted:
     """Tests for plot_background_subtracted function."""
@@ -215,6 +270,21 @@ class TestPlotBackgroundSubtracted:
             sample_ds, clip_low=-20, clip_high=20, figsize=(8, 4)
         )
         assert im.get_clim() == (-20, 20)
+        plt.close(fig)
+
+    def test_clip_percentiles_supported(self, sample_ds):
+        fig, ax, im = plot_background_subtracted(sample_ds, clip_percentiles=(10, 90))
+        expected_low, expected_high = np.nanpercentile(
+            sample_ds.data - sample_ds.data.mean(axis=1, keepdims=True), [10, 90]
+        )
+        assert im.get_clim() == pytest.approx((expected_low, expected_high))
+        plt.close(fig)
+
+    def test_save_path_writes_figure(self, sample_ds, tmp_path):
+        out = tmp_path / "bg.png"
+        fig, ax, im = plot_background_subtracted(sample_ds, save_path=out)
+        assert out.exists()
+        assert out.stat().st_size > 0
         plt.close(fig)
 
 

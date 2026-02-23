@@ -1,6 +1,6 @@
 # ecallistolib
 
-[![Python 3.10-3.12](https://img.shields.io/badge/python-3.10--3.12-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10-3.14](https://img.shields.io/badge/python-3.10--3.14-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO FITS dynamic spectra.
@@ -9,14 +9,13 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ---
 
-## 🆕 What's New in v1.0.0
+## 🆕 What's New in v1.1.0
 
-- **Precision-aware UT conversion** — `TimeAxisConverter.seconds_to_ut(..., precision="minute"|"second")`
-- **More robust downloads** — `list_remote_fits_range(..., error_policy="skip"|"raise")` with one day-fetch per date
-- **Streaming file downloads** — `download_files(..., chunk_size=...)` avoids loading full files in memory
-- **Safer parsing and combining** — stricter filename validation and typed `CombineError` failures for incompatible inputs
-- **Metadata immutability hardening** — copy operations avoid mutating previously returned spectra metadata
-- **Explicit runtime policy** — officially supported Python versions are `3.10-3.12`
+- **Time-combine alignment controls** — `combine_time(..., normalize_segment_time=..., freq_atol=...)` with clearer `meta["combined"]` details.
+- **Download reliability + ergonomics** — `download_files(..., workers=..., retries=..., retry_backoff_s=..., overwrite=...)`.
+- **Plotting UX upgrades** — `clip_percentiles=(low, high)` and direct export via `save_path` + `savefig_kwargs`.
+- **Runtime support expansion** — officially supported Python versions are now `3.10-3.14`.
+- **Stability-first defaults preserved** — all new options are additive and backward-compatible by default.
 
 ---
 
@@ -64,7 +63,7 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ## Installation
 
-Supported Python versions: **3.10-3.12**.
+Supported Python versions: **3.10-3.14**.
 
 
 ### From PyPI (Stable)
@@ -190,6 +189,19 @@ saved_paths = ecl.download_files(remote_files, out_dir="./data")
 
 for path in saved_paths:
     print(f"Downloaded: {path}")
+```
+
+You can also enable retries, parallel workers, and overwrite behavior:
+
+```python
+saved_paths = ecl.download_files(
+    remote_files,
+    out_dir="./data",
+    workers=4,               # Parallel downloads
+    retries=2,               # Retry transient failures
+    retry_backoff_s=0.5,     # Exponential backoff base
+    overwrite="skip",        # "replace" (default), "skip", or "error"
+)
 ```
 
 #### Querying Multiple Days
@@ -378,6 +390,17 @@ if ecl.can_combine_time(files):
     print(f"Total duration: {combined.time_s[-1] - combined.time_s[0]:.1f} seconds")
 ```
 
+For edge cases where segment-local time axes do not start at zero, use normalized
+alignment to avoid over-shifting:
+
+```python
+combined = ecl.combine_time(
+    files,
+    normalize_segment_time=True,  # Opt-in corrected segment alignment
+    freq_atol=0.02,               # Frequency compatibility tolerance
+)
+```
+
 **Requirements for time combination:**
 - Same station, date, and focus
 - Matching frequency axes
@@ -410,6 +433,18 @@ fig, ax, im = ecl.plot_dynamic_spectrum(
     interpolation="bilinear"
 )
 plt.savefig("spectrum.png", dpi=150, bbox_inches="tight")
+```
+
+You can also derive clip bounds from percentiles and save directly:
+
+```python
+fig, ax, im = ecl.plot_dynamic_spectrum(
+    spectrum,
+    process="noise_reduced",
+    clip_percentiles=(5, 99),     # Used when clip_low/high are not provided
+    save_path="plots/spectrum.png",
+    savefig_kwargs={"dpi": 180, "bbox_inches": "tight"},
+)
 ```
 
 #### Plotting Raw Data
@@ -659,7 +694,7 @@ List available FITS files from the e-CALLISTO archive.
 
 ---
 
-#### `download_files(items, out_dir, timeout_s=30.0, chunk_size=1048576) -> List[Path]`
+#### `download_files(items, out_dir, timeout_s=30.0, chunk_size=1048576, workers=1, retries=0, retry_backoff_s=0.5, overwrite="replace") -> list[Path]`
 
 Download FITS files to a local directory.
 
@@ -669,6 +704,10 @@ Download FITS files to a local directory.
 | `out_dir` | `str \| Path` | Output directory |
 | `timeout_s` | `float` | Request timeout per file |
 | `chunk_size` | `int` | Streaming chunk size in bytes |
+| `workers` | `int` | Parallel workers (`1` keeps sequential behavior) |
+| `retries` | `int` | Retry count for transient download failures |
+| `retry_backoff_s` | `float` | Exponential backoff base in seconds |
+| `overwrite` | `str` | `"replace"` (default), `"skip"`, or `"error"` when file exists |
 
 **Returns:** List of saved file paths.
 
@@ -808,15 +847,21 @@ Check if files can be combined along the time axis.
 
 ---
 
-#### `combine_time(paths) -> DynamicSpectrum`
+#### `combine_time(paths, normalize_segment_time=False, freq_atol=0.01) -> DynamicSpectrum`
 
 Concatenate spectra horizontally (time concatenation).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `paths` | `Iterable[str \| Path]` | Input FITS files |
+| `normalize_segment_time` | `bool` | If `True`, normalize each segment to start at zero before concatenation |
+| `freq_atol` | `float` | Absolute tolerance for frequency-axis compatibility |
 
 ---
 
 ### Plotting Functions
 
-#### `plot_dynamic_spectrum(ds, process="raw", clip_low=None, clip_high=None, title=None, cmap="inferno", figsize=None, ax=None, show_colorbar=True, time_format="seconds", intensity_units="digits", **imshow_kwargs)`
+#### `plot_dynamic_spectrum(ds, process="raw", clip_low=None, clip_high=None, clip_percentiles=None, title=None, cmap="inferno", figsize=None, ax=None, show_colorbar=True, time_format="seconds", intensity_units="digits", save_path=None, savefig_kwargs=None, **imshow_kwargs)`
 
 Plot a dynamic spectrum with selectable processing mode.
 
@@ -824,8 +869,9 @@ Plot a dynamic spectrum with selectable processing mode.
 |-----------|------|---------|-------------|
 | `ds` | `DynamicSpectrum` | — | Spectrum to plot |
 | `process` | `str` | `"raw"` | Processing mode: `"raw"`, `"background_subtracted"`, or `"noise_reduced"` |
-| `clip_low` | `float \| None` | `None` | Lower clipping bound (required for `"noise_reduced"`) |
-| `clip_high` | `float \| None` | `None` | Upper clipping bound (required for `"noise_reduced"`) |
+| `clip_low` | `float \| None` | `None` | Lower clipping bound (must be paired with `clip_high`) |
+| `clip_high` | `float \| None` | `None` | Upper clipping bound (must be paired with `clip_low`) |
+| `clip_percentiles` | `tuple[float, float] \| None` | `None` | Percentile-based clipping when explicit clip bounds are absent |
 | `title` | `str \| None` | `None` | Plot title (auto-generated if `None`) |
 | `cmap` | `str` | `"inferno"` | Matplotlib colormap |
 | `figsize` | `tuple \| None` | `None` | Figure size as `(width, height)` in inches |
@@ -833,21 +879,23 @@ Plot a dynamic spectrum with selectable processing mode.
 | `show_colorbar` | `bool` | `True` | Whether to display colorbar |
 | `time_format` | `str` | `"seconds"` | `"seconds"` or `"ut"` for time axis format |
 | `intensity_units` | `str` | `"digits"` | `"digits"` (raw ADU) or `"dB"` (pseudo-calibrated) |
+| `save_path` | `str \| Path \| None` | `None` | Optional output path to save the figure |
+| `savefig_kwargs` | `dict \| None` | `None` | Optional kwargs passed to `Figure.savefig` |
 | `**imshow_kwargs` | — | — | Additional kwargs passed to `matplotlib.imshow()` |
 
 **Returns:** Tuple of `(fig, ax, im)`.
 
-**Raises:** `ValueError` if `process="noise_reduced"` without `clip_low` and `clip_high`.
+**Raises:** `ValueError` for invalid clipping inputs or missing clipping source in `process="noise_reduced"`.
 
 ---
 
-#### `plot_raw_spectrum(ds, clip_low=None, clip_high=None, title=None, cmap="viridis", ...)`
+#### `plot_raw_spectrum(ds, clip_low=None, clip_high=None, clip_percentiles=None, title=None, cmap="viridis", save_path=None, savefig_kwargs=None, ...)`
 
 Convenience function that calls `plot_dynamic_spectrum` with `process="raw"`.
 
 ---
 
-#### `plot_background_subtracted(ds, clip_low=None, clip_high=None, title=None, cmap="jet", ...)`
+#### `plot_background_subtracted(ds, clip_low=None, clip_high=None, clip_percentiles=None, title=None, cmap="jet", save_path=None, savefig_kwargs=None, ...)`
 
 Convenience function that calls `plot_dynamic_spectrum` with `process="background_subtracted"`.
 

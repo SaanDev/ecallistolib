@@ -7,7 +7,8 @@ Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Optional, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -174,6 +175,47 @@ def _get_filename_title(ds: DynamicSpectrum, suffix: str) -> str:
     return suffix
 
 
+def _resolve_clip_limits(
+    data: np.ndarray,
+    clip_low: float | None,
+    clip_high: float | None,
+    clip_percentiles: tuple[float, float] | None,
+) -> tuple[float | None, float | None]:
+    """Resolve clipping limits from explicit values or percentiles."""
+    has_low = clip_low is not None
+    has_high = clip_high is not None
+    if has_low != has_high:
+        raise ValueError("clip_low and clip_high must be provided together.")
+
+    if has_low and has_high:
+        return float(clip_low), float(clip_high)
+
+    if clip_percentiles is None:
+        return None, None
+
+    p_low, p_high = clip_percentiles
+    if not (0 <= p_low <= 100 and 0 <= p_high <= 100):
+        raise ValueError("clip_percentiles must be within [0, 100].")
+    if p_low >= p_high:
+        raise ValueError("clip_percentiles must satisfy low < high.")
+
+    resolved_low, resolved_high = np.nanpercentile(data, [p_low, p_high])
+    return float(resolved_low), float(resolved_high)
+
+
+def _save_figure_if_requested(
+    fig: Figure,
+    save_path: str | Path | None,
+    savefig_kwargs: dict[str, Any] | None,
+) -> None:
+    """Save figure when a target path is provided."""
+    if save_path is None:
+        return
+    target = Path(save_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(target, **(savefig_kwargs or {}))
+
+
 # Conversion factor for Digits to dB (pseudo-calibration)
 # dB = Digits * 2500 / 256 / 25.4 = Digits * 0.384
 DIGITS_TO_DB_FACTOR = 2500.0 / 256.0 / 25.4  # ~0.384
@@ -184,6 +226,7 @@ def plot_dynamic_spectrum(
     process: Literal["raw", "background_subtracted", "noise_reduced"] = "raw",
     clip_low: float | None = None,
     clip_high: float | None = None,
+    clip_percentiles: tuple[float, float] | None = None,
     title: str | None = None,
     cmap: str = "inferno",
     figsize: tuple[float, float] | None = None,
@@ -191,6 +234,8 @@ def plot_dynamic_spectrum(
     show_colorbar: bool = True,
     time_format: Literal["seconds", "ut"] = "seconds",
     intensity_units: Literal["digits", "dB"] = "digits",
+    save_path: str | Path | None = None,
+    savefig_kwargs: dict[str, Any] | None = None,
     **imshow_kwargs,
 ) -> tuple["Figure", "Axes", "AxesImage"]:
     """
@@ -207,14 +252,15 @@ def plot_dynamic_spectrum(
         Processing mode to apply before plotting:
         - "raw": Plot the original data without any processing.
         - "background_subtracted": Subtract mean over time for each frequency.
-        - "noise_reduced": Apply background subtraction and clipping (requires 
-          clip_low and clip_high).
+        - "noise_reduced": Apply background subtraction and clipping.
     clip_low : float | None
-        Lower clipping threshold. Required when process="noise_reduced".
-        Also used for colormap normalization in all modes if provided.
+        Lower clipping threshold. Must be provided together with clip_high.
     clip_high : float | None
-        Upper clipping threshold. Required when process="noise_reduced".
-        Also used for colormap normalization in all modes if provided.
+        Upper clipping threshold. Must be provided together with clip_low.
+    clip_percentiles : tuple[float, float] | None
+        Percentiles used to derive clipping limits when clip_low/clip_high are
+        not provided. For process="noise_reduced", limits are derived from the
+        background-subtracted data before clipping.
     title : str | None
         Plot title. If None, auto-generates from filename and process mode.
     cmap : str
@@ -231,6 +277,10 @@ def plot_dynamic_spectrum(
     intensity_units : {"digits", "dB"}
         Units for the intensity axis. "digits" shows raw ADU values,
         "dB" converts using dB = Digits * 0.384 (pseudo-calibration).
+    save_path : str | Path | None
+        Optional output path. If provided, the figure is saved before returning.
+    savefig_kwargs : dict[str, Any] | None
+        Optional kwargs passed to ``Figure.savefig`` when ``save_path`` is set.
     **imshow_kwargs
         Additional keyword arguments passed to matplotlib's imshow().
         Common options include:
@@ -246,7 +296,7 @@ def plot_dynamic_spectrum(
     Raises
     ------
     ValueError
-        If process="noise_reduced" but clip_low or clip_high is not provided.
+        If clip bounds are invalid or process="noise_reduced" has no clip source.
 
     Example
     -------
@@ -262,29 +312,43 @@ def plot_dynamic_spectrum(
     """
     from .processing import background_subtract, noise_reduce_mean_clip
 
-    # Validate parameters for noise_reduced mode
-    if process == "noise_reduced":
-        if clip_low is None or clip_high is None:
-            raise ValueError(
-                "When process='noise_reduced', both clip_low and clip_high must be provided."
-            )
-        assert clip_low is not None
-        assert clip_high is not None
-
     # Apply processing
     if process == "background_subtracted":
         ds_plot = background_subtract(ds)
+        resolved_low, resolved_high = _resolve_clip_limits(
+            ds_plot.data,
+            clip_low=clip_low,
+            clip_high=clip_high,
+            clip_percentiles=clip_percentiles,
+        )
         title_suffix = "background_subtracted"
     elif process == "noise_reduced":
+        ds_background = background_subtract(ds)
+        resolved_low, resolved_high = _resolve_clip_limits(
+            ds_background.data,
+            clip_low=clip_low,
+            clip_high=clip_high,
+            clip_percentiles=clip_percentiles,
+        )
+        if resolved_low is None or resolved_high is None:
+            raise ValueError(
+                "When process='noise_reduced', provide clip_low/clip_high or clip_percentiles."
+            )
         ds_plot = noise_reduce_mean_clip(
             ds,
-            clip_low=cast(float, clip_low),
-            clip_high=cast(float, clip_high),
+            clip_low=resolved_low,
+            clip_high=resolved_high,
             scale=None,
         )
         title_suffix = "noise_clipped"
     else:  # raw
         ds_plot = ds
+        resolved_low, resolved_high = _resolve_clip_limits(
+            ds_plot.data,
+            clip_low=clip_low,
+            clip_high=clip_high,
+            clip_percentiles=clip_percentiles,
+        )
         title_suffix = "raw"
 
     if ax is None:
@@ -296,7 +360,7 @@ def plot_dynamic_spectrum(
 
     # Convert to dB if requested
     plot_data = ds_plot.data
-    vmin, vmax = clip_low, clip_high
+    vmin, vmax = resolved_low, resolved_high
     if intensity_units == "dB":
         plot_data = plot_data * DIGITS_TO_DB_FACTOR
         if vmin is not None:
@@ -327,6 +391,8 @@ def plot_dynamic_spectrum(
         else:
             cbar.set_label("Intensity [Digits]")
 
+    _save_figure_if_requested(fig, save_path, savefig_kwargs)
+
     return fig, ax, im
 
 
@@ -337,10 +403,13 @@ def plot_raw_spectrum(
     figsize: tuple[float, float] | None = None,
     clip_low: float | None = None,
     clip_high: float | None = None,
+    clip_percentiles: tuple[float, float] | None = None,
     ax: Optional[plt.Axes] = None,
     show_colorbar: bool = True,
     time_format: Literal["seconds", "ut"] = "seconds",
     intensity_units: Literal["digits", "dB"] = "digits",
+    save_path: str | Path | None = None,
+    savefig_kwargs: dict[str, Any] | None = None,
     **imshow_kwargs,
 ) -> tuple["Figure", "Axes", "AxesImage"]:
     """
@@ -363,6 +432,8 @@ def plot_raw_spectrum(
         Minimum value for colormap normalization.
     clip_high : float | None
         Maximum value for colormap normalization.
+    clip_percentiles : tuple[float, float] | None
+        Percentile-based clipping limits when clip_low/clip_high are absent.
     ax : plt.Axes | None
         Existing axes to plot on. If None, creates a new figure.
     show_colorbar : bool
@@ -371,6 +442,10 @@ def plot_raw_spectrum(
         Format for the time axis.
     intensity_units : {"digits", "dB"}
         Units for the intensity axis.
+    save_path : str | Path | None
+        Optional output path for saving the figure.
+    savefig_kwargs : dict[str, Any] | None
+        Optional kwargs passed to ``Figure.savefig``.
     **imshow_kwargs
         Additional keyword arguments passed to matplotlib's imshow().
 
@@ -389,6 +464,7 @@ def plot_raw_spectrum(
         process="raw",
         clip_low=clip_low,
         clip_high=clip_high,
+        clip_percentiles=clip_percentiles,
         title=title,
         cmap=cmap,
         figsize=figsize,
@@ -396,6 +472,8 @@ def plot_raw_spectrum(
         show_colorbar=show_colorbar,
         time_format=time_format,
         intensity_units=intensity_units,
+        save_path=save_path,
+        savefig_kwargs=savefig_kwargs,
         **imshow_kwargs,
     )
 
@@ -407,10 +485,13 @@ def plot_background_subtracted(
     figsize: tuple[float, float] | None = None,
     clip_low: float | None = None,
     clip_high: float | None = None,
+    clip_percentiles: tuple[float, float] | None = None,
     ax: Optional[plt.Axes] = None,
     show_colorbar: bool = True,
     time_format: Literal["seconds", "ut"] = "seconds",
     intensity_units: Literal["digits", "dB"] = "digits",
+    save_path: str | Path | None = None,
+    savefig_kwargs: dict[str, Any] | None = None,
     **imshow_kwargs,
 ) -> tuple["Figure", "Axes", "AxesImage"]:
     """
@@ -434,6 +515,8 @@ def plot_background_subtracted(
         Minimum value for colormap normalization.
     clip_high : float | None
         Maximum value for colormap normalization.
+    clip_percentiles : tuple[float, float] | None
+        Percentile-based clipping limits when clip_low/clip_high are absent.
     ax : plt.Axes | None
         Existing axes to plot on. If None, creates a new figure.
     show_colorbar : bool
@@ -442,6 +525,10 @@ def plot_background_subtracted(
         Format for the time axis.
     intensity_units : {"digits", "dB"}
         Units for the intensity axis.
+    save_path : str | Path | None
+        Optional output path for saving the figure.
+    savefig_kwargs : dict[str, Any] | None
+        Optional kwargs passed to ``Figure.savefig``.
     **imshow_kwargs
         Additional keyword arguments passed to matplotlib's imshow().
 
@@ -460,6 +547,7 @@ def plot_background_subtracted(
         process="background_subtracted",
         clip_low=clip_low,
         clip_high=clip_high,
+        clip_percentiles=clip_percentiles,
         title=title,
         cmap=cmap,
         figsize=figsize,
@@ -467,6 +555,8 @@ def plot_background_subtracted(
         show_colorbar=show_colorbar,
         time_format=time_format,
         intensity_units=intensity_units,
+        save_path=save_path,
+        savefig_kwargs=savefig_kwargs,
         **imshow_kwargs,
     )
 

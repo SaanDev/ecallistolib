@@ -6,9 +6,11 @@ Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+import time
 from typing import Iterable, List, Literal
 
 import requests
@@ -17,6 +19,7 @@ from bs4 import BeautifulSoup
 from .exceptions import DownloadError
 
 DEFAULT_BASE_URL = "http://soleil80.cs.technik.fhnw.ch/solarradio/data/2002-20yy_Callisto/"
+_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 
 
 @dataclass(frozen=True)
@@ -219,7 +222,11 @@ def download_files(
     out_dir: str | Path,
     timeout_s: float = 30.0,
     chunk_size: int = 1_048_576,
-) -> List[Path]:
+    workers: int = 1,
+    retries: int = 0,
+    retry_backoff_s: float = 0.5,
+    overwrite: Literal["replace", "skip", "error"] = "replace",
+) -> list[Path]:
     """
     Download FITS files to a local directory.
 
@@ -233,10 +240,22 @@ def download_files(
         HTTP request timeout per file in seconds.
     chunk_size : int
         Number of bytes per chunk when streaming response content.
+    workers : int
+        Number of parallel download workers. ``1`` keeps sequential behavior.
+    retries : int
+        Number of retry attempts for transient network errors per file.
+    retry_backoff_s : float
+        Base backoff in seconds for retries. Delay follows:
+        ``retry_backoff_s * (2 ** attempt_index)``.
+    overwrite : {"replace", "skip", "error"}
+        Behavior when target file already exists:
+        - ``"replace"``: overwrite existing file (default)
+        - ``"skip"``: keep existing file and skip download
+        - ``"error"``: raise DownloadError
 
     Returns
     -------
-    List[Path]
+    list[Path]
         List of paths to saved files.
 
     Raises
@@ -246,34 +265,83 @@ def download_files(
     """
     if chunk_size <= 0:
         raise ValueError("chunk_size must be > 0")
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+    if retries < 0:
+        raise ValueError("retries must be >= 0")
+    if retry_backoff_s < 0:
+        raise ValueError("retry_backoff_s must be >= 0")
+    if overwrite not in {"replace", "skip", "error"}:
+        raise ValueError("overwrite must be one of: 'replace', 'skip', 'error'")
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    items = list(items)
 
-    saved: List[Path] = []
-    with requests.Session() as s:
-        for it in items:
-            target = out_dir / it.name
+    def _is_transient_request_error(exc: requests.exceptions.RequestException) -> bool:
+        if isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+            return True
+        if isinstance(exc, requests.exceptions.HTTPError):
+            response = exc.response
+            if response is None:
+                return False
+            return int(response.status_code) in _TRANSIENT_HTTP_STATUSES
+        return False
+
+    def _download_one(
+        session: requests.Session,
+        item: RemoteFITS,
+    ) -> Path:
+        target = out_dir / item.name
+
+        if target.exists():
+            if overwrite == "skip":
+                return target
+            if overwrite == "error":
+                raise DownloadError(f"File already exists: {target}")
+
+        for attempt in range(retries + 1):
             try:
-                with s.get(it.url, timeout=timeout_s, stream=True) as r:
-                    r.raise_for_status()
-                    with target.open("wb") as f:
-                        for chunk in r.iter_content(chunk_size=chunk_size):
+                with session.get(item.url, timeout=timeout_s, stream=True) as response:
+                    response.raise_for_status()
+                    with target.open("wb") as handle:
+                        for chunk in response.iter_content(chunk_size=chunk_size):
                             if chunk:
-                                f.write(chunk)
-            except requests.exceptions.Timeout:
+                                handle.write(chunk)
+                return target
+            except requests.exceptions.RequestException as exc:
                 if target.exists():
                     target.unlink(missing_ok=True)
-                raise DownloadError(f"Timeout downloading {it.name}")
-            except requests.exceptions.RequestException as e:
+                if _is_transient_request_error(exc) and attempt < retries:
+                    time.sleep(retry_backoff_s * (2 ** attempt))
+                    continue
+                if isinstance(exc, requests.exceptions.Timeout):
+                    raise DownloadError(f"Timeout downloading {item.name}")
+                raise DownloadError(f"Failed to download {item.name}: {exc}")
+            except OSError as exc:
                 if target.exists():
                     target.unlink(missing_ok=True)
-                raise DownloadError(f"Failed to download {it.name}: {e}")
-            except OSError as e:
-                if target.exists():
-                    target.unlink(missing_ok=True)
-                raise DownloadError(f"Failed to save {it.name}: {e}") from e
+                raise DownloadError(f"Failed to save {item.name}: {exc}") from exc
 
-            saved.append(target)
+        # Unreachable due to explicit returns/raises in loop.
+        raise DownloadError(f"Failed to download {item.name}")
 
-    return saved
+    if workers == 1:
+        saved: list[Path] = []
+        with requests.Session() as session:
+            for item in items:
+                saved.append(_download_one(session, item))
+        return saved
+
+    def _worker(index: int, item: RemoteFITS) -> tuple[int, Path]:
+        with requests.Session() as session:
+            return index, _download_one(session, item)
+
+    ordered: list[Path | None] = [None] * len(items)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_worker, index, item) for index, item in enumerate(items)]
+        for future in futures:
+            index, path = future.result()
+            ordered[index] = path
+
+    return [path for path in ordered if path is not None]

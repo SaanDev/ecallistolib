@@ -125,14 +125,33 @@ def can_combine_time(paths: Iterable[str | Path], freq_atol: float = 0.01) -> bo
     return True
 
 
-def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
+def combine_time(
+    paths: Iterable[str | Path],
+    *,
+    normalize_segment_time: bool = False,
+    freq_atol: float = 0.01,
+) -> DynamicSpectrum:
     """
     Concatenate spectra along time axis (horizontal concatenation).
     Assumes all have identical frequency axis.
+
+    Parameters
+    ----------
+    paths : Iterable[str | Path]
+        Input FITS paths.
+    normalize_segment_time : bool
+        If False (default), preserve legacy behavior by shifting each segment's
+        full time axis by ``last_time + dt``. If True, normalize each segment to
+        start at zero before shifting, which avoids over-shifting when a segment
+        has a non-zero local start time.
+    freq_atol : float
+        Absolute tolerance for frequency axis compatibility checks.
     """
     paths = list(paths)
     if not paths:
         raise CombineError("At least one path is required to combine spectra in time.")
+    if freq_atol < 0:
+        raise ValueError("freq_atol must be >= 0")
 
     try:
         parsed = [(p, parse_callisto_filename(p)) for p in paths]
@@ -167,7 +186,7 @@ def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
 
         if ds.time_s.size == 0:
             raise CombineError(f"Cannot combine spectrum with empty time axis: {p}")
-        if ds.freqs_mhz.shape != freqs.shape or not np.allclose(ds.freqs_mhz, freqs, atol=0.01):
+        if ds.freqs_mhz.shape != freqs.shape or not np.allclose(ds.freqs_mhz, freqs, atol=freq_atol):
             raise CombineError("Cannot combine along time: frequency axes are not compatible.")
 
         if ds.time_s.size > 1:
@@ -176,11 +195,19 @@ def combine_time(paths: Iterable[str | Path]) -> DynamicSpectrum:
             dt = 1.0
 
         shift = float(combined_time[-1] + dt)
-        adjusted_time = ds.time_s + shift
+        if normalize_segment_time:
+            adjusted_time = (ds.time_s - float(ds.time_s[0])) + shift
+        else:
+            adjusted_time = ds.time_s + shift
 
         combined_data = np.concatenate([combined_data, ds.data], axis=1)
         combined_time = np.concatenate([combined_time, adjusted_time])
 
     meta = dict(ds0.meta)
-    meta["combined"] = {"mode": "time", "sources": [str(Path(p)) for p in paths]}
+    meta["combined"] = {
+        "mode": "time",
+        "sources": [str(Path(p)) for p in paths],
+        "time_alignment": "normalized" if normalize_segment_time else "legacy",
+        "freq_atol": float(freq_atol),
+    }
     return DynamicSpectrum(data=combined_data, freqs_mhz=freqs, time_s=combined_time, source=ds0.source, meta=meta)
