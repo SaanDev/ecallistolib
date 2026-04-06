@@ -4,6 +4,7 @@ Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
 
+from datetime import datetime, timezone
 import numpy as np
 import pytest
 from pathlib import Path
@@ -114,6 +115,26 @@ class TestDynamicSpectrumConvenienceProperties:
         times = np.arange(5, dtype=float)
         ds = DynamicSpectrum(data=data, freqs_mhz=freqs, time_s=times)
         assert ds.freq_range_mhz == (100.0, 200.0)
+
+    def test_start_datetime_property(self):
+        start = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+        ds = DynamicSpectrum(
+            data=np.zeros((2, 3)),
+            freqs_mhz=np.array([100.0, 200.0]),
+            time_s=np.array([0.0, 1.0, 2.0]),
+            meta={"observation_start": start},
+        )
+        assert ds.start_datetime == start
+
+    def test_end_datetime_property(self):
+        end = datetime(2024, 1, 1, 12, 15, tzinfo=timezone.utc)
+        ds = DynamicSpectrum(
+            data=np.zeros((2, 3)),
+            freqs_mhz=np.array([100.0, 200.0]),
+            time_s=np.array([0.0, 1.0, 2.0]),
+            meta={"observation_end": end},
+        )
+        assert ds.end_datetime == end
 
 
 class TestDynamicSpectrumCopyWith:

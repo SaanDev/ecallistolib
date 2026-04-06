@@ -9,13 +9,15 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ---
 
-## 🆕 What's New in v1.1.0
+## 🆕 What's New in v1.2.0
 
-- **Time-combine alignment controls** — `combine_time(..., normalize_segment_time=..., freq_atol=...)` with clearer `meta["combined"]` details.
+- **Timestamp-aware time combination** — `combine_time(..., timeline="actual")` preserves real offsets between observation segments.
+- **Observation datetime metadata** — `read_fits()` now records `observation_start` / `observation_end`, with `DynamicSpectrum.start_datetime` and `.end_datetime` convenience properties.
+- **Richer time-combine metadata** — merged spectra now record `meta["combined"]["timeline"]` and `segment_offsets_s`.
 - **Download reliability + ergonomics** — `download_files(..., workers=..., retries=..., retry_backoff_s=..., overwrite=...)`.
 - **Plotting UX upgrades** — `clip_percentiles=(low, high)` and direct export via `save_path` + `savefig_kwargs`.
 - **Runtime support expansion** — officially supported Python versions are now `3.10-3.14`.
-- **Stability-first defaults preserved** — all new options are additive and backward-compatible by default.
+- **Stability-first defaults preserved** — `combine_time()` still defaults to contiguous legacy-compatible behavior unless you opt into `timeline="actual"`.
 
 ---
 
@@ -50,9 +52,10 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 - 📥 **Download** – List and download FITS files directly from the e-CALLISTO data archive
 - 📖 **Read** – Parse e-CALLISTO FITS files (`.fit`, `.fit.gz`) into structured Python objects
+- 🕓 **Observation Datetimes** – Preserve absolute start/end timestamps when FITS headers or filenames provide them
 - 🔧 **Process** – Apply noise reduction techniques (mean subtraction, clipping, scaling)
 - ✂️ **Crop** – Extract frequency and time ranges from spectra
-- 🔗 **Combine** – Merge multiple spectra along the time or frequency axis
+- 🔗 **Combine** – Merge multiple spectra along the time or frequency axis, including timestamp-aware time merges
 - 📊 **Plot** – Generate publication-ready dynamic spectrum visualizations
 - 🕒 **Time Precision Control** – Convert seconds to UT in `HH:MM` or `HH:MM:SS`
 - ⚡ **Efficient I/O** – Stream downloads and optimize multi-day remote listing queries
@@ -148,6 +151,10 @@ print(f"Num frequencies: {spectrum.n_freq}")    # Number of frequency channels
 print(f"Num time samples: {spectrum.n_time}")   # Number of time samples
 print(f"Duration: {spectrum.duration_s} s")     # Total observation duration
 print(f"Freq range: {spectrum.freq_range_mhz}") # (min, max) frequency in MHz
+
+# New in v1.2.0: Absolute observation datetimes when available
+print(f"Observation start: {spectrum.start_datetime}")
+print(f"Observation end: {spectrum.end_datetime}")
 ```
 
 #### Parsing Filenames
@@ -385,17 +392,29 @@ files = [
 
 # Check compatibility
 if ecl.can_combine_time(files):
-    combined = ecl.combine_time(files)
+    combined = ecl.combine_time(files, timeline="actual")
     print(f"Combined shape: {combined.shape}")
     print(f"Total duration: {combined.time_s[-1] - combined.time_s[0]:.1f} seconds")
+    print(f"Timeline mode: {combined.meta['combined']['timeline']}")
 ```
 
-For edge cases where segment-local time axes do not start at zero, use normalized
-alignment to avoid over-shifting:
+Use `timeline="actual"` to preserve the real offsets between segment start times
+from FITS headers or e-CALLISTO filenames:
+
+```python
+combined = ecl.combine_time(files, timeline="actual")
+print(combined.meta["combined"]["segment_offsets_s"])
+# [0.0, 900.0, 1800.0] for 15-minute segment spacing
+```
+
+If you prefer a gap-free synthetic timeline, `combine_time()` still defaults to
+contiguous behavior. For edge cases where segment-local time axes do not start at
+zero, use normalized alignment to avoid over-shifting:
 
 ```python
 combined = ecl.combine_time(
     files,
+    timeline="contiguous",
     normalize_segment_time=True,  # Opt-in corrected segment alignment
     freq_atol=0.02,               # Frequency compatibility tolerance
 )
@@ -640,6 +659,8 @@ class DynamicSpectrum:
 | `n_freq` | `int` | Number of frequency channels |
 | `n_time` | `int` | Number of time samples |
 | `duration_s` | `float` | Total observation duration in seconds |
+| `start_datetime` | `datetime \| None` | Absolute observation start time in UTC when available |
+| `end_datetime` | `datetime \| None` | Absolute observation end time in UTC when available |
 | `freq_range_mhz` | `tuple[float, float]` | Frequency range as `(min, max)` in MHz |
 
 #### Methods
@@ -661,6 +682,12 @@ Read an e-CALLISTO FITS file.
 | `path` | `str \| Path` | Path to the FITS file (`.fit` or `.fit.gz`) |
 
 **Returns:** `DynamicSpectrum` object with data, frequencies, time, and metadata.
+
+Metadata may include:
+- `station`, `date`, `time`, `focus`
+- `ut_start_sec`
+- `observation_start`
+- `observation_end`
 
 ---
 
@@ -847,14 +874,15 @@ Check if files can be combined along the time axis.
 
 ---
 
-#### `combine_time(paths, normalize_segment_time=False, freq_atol=0.01) -> DynamicSpectrum`
+#### `combine_time(paths, timeline="contiguous", normalize_segment_time=False, freq_atol=0.01) -> DynamicSpectrum`
 
 Concatenate spectra horizontally (time concatenation).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `paths` | `Iterable[str \| Path]` | Input FITS files |
-| `normalize_segment_time` | `bool` | If `True`, normalize each segment to start at zero before concatenation |
+| `timeline` | `str` | `"contiguous"` (default) or `"actual"` to preserve real segment offsets |
+| `normalize_segment_time` | `bool` | Applies only to `timeline="contiguous"` |
 | `freq_atol` | `float` | Absolute tolerance for frequency-axis compatibility |
 
 ---
@@ -994,7 +1022,7 @@ paths = ecl.download_files(remote[:2], out_dir="./data")
 
 # 2. Read and combine
 if ecl.can_combine_time(paths):
-    spectrum = ecl.combine_time(paths)
+    spectrum = ecl.combine_time(paths, timeline="actual")
 else:
     spectrum = ecl.read_fits(paths[0])
 
@@ -1022,6 +1050,8 @@ spectrum = ecl.read_fits("my_file.fit.gz")
 print(f"Station: {spectrum.meta.get('station')}")
 print(f"Date: {spectrum.meta.get('date')}")
 print(f"UT Start: {spectrum.meta.get('ut_start_sec')} seconds")
+print(f"Observation start: {spectrum.start_datetime}")
+print(f"Observation end: {spectrum.end_datetime}")
 
 # After processing, metadata is preserved and extended
 processed = ecl.noise_reduce_mean_clip(spectrum, clip_low=-5.0, clip_high=20.0)

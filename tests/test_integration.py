@@ -4,6 +4,8 @@ Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from conftest import create_sample_fits
@@ -52,6 +54,8 @@ class TestReadFitsIntegration:
         assert ds.meta.get("date") == "20240101"
         assert ds.meta.get("time") == "120000"
         assert ds.meta.get("focus") == "01"
+        assert ds.start_datetime == datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+        assert ds.end_datetime == datetime(2024, 1, 1, 12, 15, tzinfo=timezone.utc)
 
     def test_read_fits_file_not_found(self):
         """Test reading non-existent file raises FileNotFoundError."""
@@ -129,8 +133,8 @@ class TestCombineIntegration:
         f1 = tmp_path / "SAMPLE_20240101_120000_01.fit"
         f2 = tmp_path / "SAMPLE_20240101_121500_01.fit"
 
-        create_sample_fits(f1, n_freq=50, n_time=100)
-        create_sample_fits(f2, n_freq=50, n_time=100)
+        create_sample_fits(f1, n_freq=50, n_time=100, time_duration_s=600)
+        create_sample_fits(f2, n_freq=50, n_time=100, time_duration_s=600)
 
         # Combine
         combined = ecl.combine_time([f1, f2])
@@ -138,6 +142,21 @@ class TestCombineIntegration:
         # Should have double the time samples
         assert combined.shape[1] == 200
         assert combined.shape[0] == 50
+
+    def test_combine_time_actual_timeline_integration(self, tmp_path):
+        """Actual timeline should preserve real gaps between segment start times."""
+        f1 = tmp_path / "SAMPLE_20240101_120000_01.fit"
+        f2 = tmp_path / "SAMPLE_20240101_121500_01.fit"
+
+        create_sample_fits(f1, n_freq=50, n_time=100, time_duration_s=600)
+        create_sample_fits(f2, n_freq=50, n_time=100, time_duration_s=600)
+
+        combined = ecl.combine_time([f1, f2], timeline="actual")
+
+        assert combined.meta["combined"]["timeline"] == "actual"
+        assert combined.time_s[100] == pytest.approx(900.0)
+        assert combined.start_datetime == datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+        assert combined.end_datetime == datetime(2024, 1, 1, 12, 25, tzinfo=timezone.utc)
 
 
 class TestExceptionIntegration:

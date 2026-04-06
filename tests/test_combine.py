@@ -93,6 +93,7 @@ def test_combine_time_happy_path(tmp_path):
     out = combine_time([f1, f2])
     assert out.shape == (10, 40)
     assert out.meta["combined"]["mode"] == "time"
+    assert out.meta["combined"]["timeline"] == "contiguous"
     assert out.meta["combined"]["time_alignment"] == "legacy"
     assert out.meta["combined"]["freq_atol"] == 0.01
     assert out.time_s[20] > out.time_s[19]
@@ -137,6 +138,98 @@ def test_combine_time_normalized_segment_time(monkeypatch):
     assert np.allclose(legacy.time_s, [0.0, 1.0, 2.0, 13.0, 14.0, 15.0])
     assert np.allclose(normalized.time_s, [0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
     assert normalized.meta["combined"]["time_alignment"] == "normalized"
+
+
+def test_combine_time_actual_timeline_uses_observation_start(monkeypatch):
+    p1 = Path("SAMPLE_20240101_120000_01.fit")
+    p2 = Path("SAMPLE_20240101_121500_01.fit")
+
+    ds1 = DynamicSpectrum(
+        data=np.array([[1.0, 2.0, 3.0]]),
+        freqs_mhz=np.array([100.0]),
+        time_s=np.array([0.0, 1.0, 2.0]),
+        source=p1,
+        meta={"observation_start": np.datetime64("2024-01-01T12:00:00")},  # type: ignore[dict-item]
+    )
+    ds2 = DynamicSpectrum(
+        data=np.array([[4.0, 5.0, 6.0]]),
+        freqs_mhz=np.array([100.0]),
+        time_s=np.array([10.0, 11.0, 12.0]),
+        source=p2,
+        meta={"observation_start": np.datetime64("2024-01-01T12:15:00")},  # type: ignore[dict-item]
+    )
+
+    def fake_read_fits(path):
+        return ds1 if "120000" in str(path) else ds2
+
+    monkeypatch.setattr(combine_mod, "read_fits", fake_read_fits)
+
+    with pytest.raises(CombineError, match="observation_start"):
+        combine_time([p1, p2], timeline="actual")
+
+
+def test_combine_time_actual_timeline_with_datetime_metadata(monkeypatch):
+    from datetime import datetime, timezone
+
+    p1 = Path("SAMPLE_20240101_120000_01.fit")
+    p2 = Path("SAMPLE_20240101_121500_01.fit")
+
+    ds1 = DynamicSpectrum(
+        data=np.array([[1.0, 2.0, 3.0]]),
+        freqs_mhz=np.array([100.0]),
+        time_s=np.array([0.0, 1.0, 2.0]),
+        source=p1,
+        meta={"observation_start": datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)},
+    )
+    ds2 = DynamicSpectrum(
+        data=np.array([[4.0, 5.0, 6.0]]),
+        freqs_mhz=np.array([100.0]),
+        time_s=np.array([10.0, 11.0, 12.0]),
+        source=p2,
+        meta={"observation_start": datetime(2024, 1, 1, 12, 15, tzinfo=timezone.utc)},
+    )
+
+    def fake_read_fits(path):
+        return ds1 if "120000" in str(path) else ds2
+
+    monkeypatch.setattr(combine_mod, "read_fits", fake_read_fits)
+
+    actual = combine_time([p1, p2], timeline="actual")
+
+    assert np.allclose(actual.time_s, [0.0, 1.0, 2.0, 910.0, 911.0, 912.0])
+    assert actual.meta["combined"]["timeline"] == "actual"
+    assert actual.meta["combined"]["time_alignment"] == "actual"
+    assert actual.meta["combined"]["segment_offsets_s"] == [0.0, 900.0]
+
+
+def test_combine_time_actual_timeline_rejects_normalization(monkeypatch):
+    from datetime import datetime, timezone
+
+    p1 = Path("SAMPLE_20240101_120000_01.fit")
+    p2 = Path("SAMPLE_20240101_121500_01.fit")
+
+    ds1 = DynamicSpectrum(
+        data=np.array([[1.0]]),
+        freqs_mhz=np.array([100.0]),
+        time_s=np.array([0.0]),
+        source=p1,
+        meta={"observation_start": datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)},
+    )
+    ds2 = DynamicSpectrum(
+        data=np.array([[2.0]]),
+        freqs_mhz=np.array([100.0]),
+        time_s=np.array([0.0]),
+        source=p2,
+        meta={"observation_start": datetime(2024, 1, 1, 12, 15, tzinfo=timezone.utc)},
+    )
+
+    def fake_read_fits(path):
+        return ds1 if "120000" in str(path) else ds2
+
+    monkeypatch.setattr(combine_mod, "read_fits", fake_read_fits)
+
+    with pytest.raises(ValueError, match="normalize_segment_time"):
+        combine_time([p1, p2], timeline="actual", normalize_segment_time=True)
 
 
 def test_combine_time_freq_atol_controls_compatibility(monkeypatch):

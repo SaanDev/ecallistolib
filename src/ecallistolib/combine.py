@@ -6,14 +6,26 @@ Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 import numpy as np
 
 from .exceptions import CombineError, InvalidFITSError, InvalidFilenameError
 from .io import parse_callisto_filename, read_fits
 from .models import DynamicSpectrum
+
+
+def _require_observation_start(ds: DynamicSpectrum, path: str | Path) -> datetime:
+    """Return the observation start datetime for actual-timeline combination."""
+    observation_start = ds.start_datetime
+    if observation_start is None:
+        raise CombineError(
+            "Actual timeline combination requires observation_start metadata "
+            f"for every segment. Missing for: {path}"
+        )
+    return observation_start
 
 
 def can_combine_frequency(path1: str | Path, path2: str | Path, time_atol: float = 0.01) -> bool:
@@ -128,6 +140,7 @@ def can_combine_time(paths: Iterable[str | Path], freq_atol: float = 0.01) -> bo
 def combine_time(
     paths: Iterable[str | Path],
     *,
+    timeline: Literal["contiguous", "actual"] = "contiguous",
     normalize_segment_time: bool = False,
     freq_atol: float = 0.01,
 ) -> DynamicSpectrum:
@@ -139,7 +152,13 @@ def combine_time(
     ----------
     paths : Iterable[str | Path]
         Input FITS paths.
+    timeline : {"contiguous", "actual"}
+        - ``"contiguous"`` (default): place each segment immediately after the
+          previous segment, ignoring gaps in observation start times.
+        - ``"actual"``: preserve real offsets between segment start times using
+          absolute observation timestamps from FITS headers or filenames.
     normalize_segment_time : bool
+        Applies only when ``timeline="contiguous"``.
         If False (default), preserve legacy behavior by shifting each segment's
         full time axis by ``last_time + dt``. If True, normalize each segment to
         start at zero before shifting, which avoids over-shifting when a segment
@@ -150,8 +169,12 @@ def combine_time(
     paths = list(paths)
     if not paths:
         raise CombineError("At least one path is required to combine spectra in time.")
+    if timeline not in {"contiguous", "actual"}:
+        raise ValueError("timeline must be one of: 'contiguous', 'actual'")
     if freq_atol < 0:
         raise ValueError("freq_atol must be >= 0")
+    if timeline == "actual" and normalize_segment_time:
+        raise ValueError("normalize_segment_time cannot be used with timeline='actual'")
 
     try:
         parsed = [(p, parse_callisto_filename(p)) for p in paths]
@@ -177,6 +200,10 @@ def combine_time(
     combined_data = ds0.data
     combined_time = ds0.time_s
     freqs = ds0.freqs_mhz
+    segment_offsets_s = [0.0]
+    base_observation_start = ds0.start_datetime if timeline == "actual" else None
+    if timeline == "actual":
+        base_observation_start = _require_observation_start(ds0, paths[0])
 
     for p in paths[1:]:
         try:
@@ -189,25 +216,44 @@ def combine_time(
         if ds.freqs_mhz.shape != freqs.shape or not np.allclose(ds.freqs_mhz, freqs, atol=freq_atol):
             raise CombineError("Cannot combine along time: frequency axes are not compatible.")
 
-        if ds.time_s.size > 1:
-            dt = float(ds.time_s[1] - ds.time_s[0])
+        if timeline == "actual":
+            observation_start = _require_observation_start(ds, p)
+            assert base_observation_start is not None
+            start_offset_s = float((observation_start - base_observation_start).total_seconds())
+            adjusted_time = ds.time_s + start_offset_s
         else:
-            dt = 1.0
+            if ds.time_s.size > 1:
+                dt = float(ds.time_s[1] - ds.time_s[0])
+            else:
+                dt = 1.0
 
-        shift = float(combined_time[-1] + dt)
-        if normalize_segment_time:
-            adjusted_time = (ds.time_s - float(ds.time_s[0])) + shift
-        else:
-            adjusted_time = ds.time_s + shift
+            shift = float(combined_time[-1] + dt)
+            if normalize_segment_time:
+                adjusted_time = (ds.time_s - float(ds.time_s[0])) + shift
+            else:
+                adjusted_time = ds.time_s + shift
+            start_offset_s = float(shift)
 
         combined_data = np.concatenate([combined_data, ds.data], axis=1)
         combined_time = np.concatenate([combined_time, adjusted_time])
+        segment_offsets_s.append(start_offset_s)
 
     meta = dict(ds0.meta)
+    if ds0.start_datetime is not None:
+        meta["observation_start"] = ds0.start_datetime
+        meta["observation_end"] = ds0.start_datetime + timedelta(seconds=float(np.max(combined_time)))
+        if ds0.meta.get("ut_start_sec") is not None:
+            meta["ut_start_sec"] = float(ds0.meta["ut_start_sec"])
     meta["combined"] = {
         "mode": "time",
         "sources": [str(Path(p)) for p in paths],
-        "time_alignment": "normalized" if normalize_segment_time else "legacy",
+        "timeline": timeline,
+        "time_alignment": (
+            "actual"
+            if timeline == "actual"
+            else ("normalized" if normalize_segment_time else "legacy")
+        ),
         "freq_atol": float(freq_atol),
+        "segment_offsets_s": segment_offsets_s,
     }
     return DynamicSpectrum(data=combined_data, freqs_mhz=freqs, time_s=combined_time, source=ds0.source, meta=meta)

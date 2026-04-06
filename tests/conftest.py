@@ -4,6 +4,7 @@ Sahan S Liyanage (sahanslst@gmail.com)
 Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 """
 
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +51,26 @@ def create_sample_fits(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    date_obs = "2024-01-01"
+    time_obs = "12:00:00"
+    stem = output_path.name
+    for suffix in (".fit.gz", ".fit"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    parts = stem.split("_")
+    if len(parts) >= 4:
+        try:
+            parsed = datetime.strptime(
+                f"{parts[-3]}{parts[-2]}",
+                "%Y%m%d%H%M%S",
+            )
+        except ValueError:
+            parsed = None
+        if parsed is not None:
+            date_obs = parsed.strftime("%Y-%m-%d")
+            time_obs = parsed.strftime("%H:%M:%S")
+
     # Generate frequency and time axes
     freqs = np.linspace(freq_start, freq_end, n_freq).astype(np.float64)
     times = np.linspace(0, time_duration_s, n_time).astype(np.float64)
@@ -88,8 +109,8 @@ def create_sample_fits(
     primary_hdu.header["NAXIS2"] = n_freq
     primary_hdu.header["TELESCOP"] = station
     primary_hdu.header["INSTRUME"] = "e-CALLISTO"
-    primary_hdu.header["DATE-OBS"] = "2024-01-01"
-    primary_hdu.header["TIME-OBS"] = "12:00:00"
+    primary_hdu.header["DATE-OBS"] = date_obs
+    primary_hdu.header["TIME-OBS"] = time_obs
     primary_hdu.header["CONTENT"] = "Radio Spectrum"
 
     # Create binary table extension with frequency and time axes

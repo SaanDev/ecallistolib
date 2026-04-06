@@ -7,7 +7,7 @@ Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 from typing import Optional
@@ -87,6 +87,81 @@ def _try_read_ut_start_seconds(hdul: fits.HDUList) -> Optional[float]:
         return None
 
 
+def _try_parse_iso_datetime(value: str) -> Optional[datetime]:
+    """Parse a FITS date/time string into a UTC datetime."""
+    text = value.strip()
+    if not text:
+        return None
+
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _seconds_since_midnight(dt: datetime) -> float:
+    """Return seconds since UTC midnight for a timezone-aware datetime."""
+    dt_utc = dt.astimezone(timezone.utc)
+    return (
+        dt_utc.hour * 3600
+        + dt_utc.minute * 60
+        + dt_utc.second
+        + (dt_utc.microsecond / 1_000_000.0)
+    )
+
+
+def _try_read_observation_start(
+    hdul: fits.HDUList,
+    filename_parts: CallistoFileParts | None,
+) -> Optional[datetime]:
+    """
+    Read observation start time as an absolute UTC datetime.
+
+    Prefer FITS headers, but fall back to the e-CALLISTO filename when needed.
+    """
+    hdr = hdul[0].header
+    date_obs = hdr.get("DATE-OBS")
+    time_obs = hdr.get("TIME-OBS")
+
+    if date_obs is not None and time_obs is not None:
+        date_text = str(date_obs).strip()
+        time_text = str(time_obs).strip()
+
+        parsed = _try_parse_iso_datetime(f"{date_text}T{time_text}")
+        if parsed is not None:
+            return parsed
+
+        parsed = _try_parse_iso_datetime(date_text)
+        if parsed is not None and ("T" in date_text or " " in date_text):
+            return parsed
+
+    if date_obs is not None:
+        date_text = str(date_obs).strip()
+        parsed = _try_parse_iso_datetime(date_text)
+        if parsed is not None and ("T" in date_text or " " in date_text):
+            return parsed
+
+    if filename_parts is None:
+        return None
+
+    try:
+        parsed = datetime.strptime(
+            f"{filename_parts.date_yyyymmdd}{filename_parts.time_hhmmss}",
+            "%Y%m%d%H%M%S",
+        )
+    except ValueError:
+        return None
+
+    return parsed.replace(tzinfo=timezone.utc)
+
+
 def read_fits(path: str | Path) -> DynamicSpectrum:
     """
     Read an e-CALLISTO FITS file (.fit or .fit.gz) into a DynamicSpectrum.
@@ -113,6 +188,13 @@ def read_fits(path: str | Path) -> DynamicSpectrum:
     if not path.exists():
         raise FileNotFoundError(f"FITS file not found: {path}")
 
+    parts: CallistoFileParts | None = None
+    try:
+        parts = parse_callisto_filename(path)
+    except InvalidFilenameError:
+        # Filename parsing is optional, continue without metadata
+        pass
+
     try:
         with fits.open(path) as hdul:
             if len(hdul) < 2:
@@ -135,21 +217,28 @@ def read_fits(path: str | Path) -> DynamicSpectrum:
                 ) from e
 
             ut_start_sec = _try_read_ut_start_seconds(hdul)
+            observation_start = _try_read_observation_start(hdul, parts)
+            if ut_start_sec is None and observation_start is not None:
+                ut_start_sec = _seconds_since_midnight(observation_start)
 
     except OSError as e:
         raise InvalidFITSError(f"Failed to open FITS file: {path}") from e
 
-    meta: dict[str, object] = {"ut_start_sec": ut_start_sec}
-    try:
-        parts = parse_callisto_filename(path)
+    observation_end = None
+    if observation_start is not None and time_s.size > 0:
+        observation_end = observation_start + timedelta(seconds=float(np.max(time_s)))
+
+    meta: dict[str, object] = {
+        "ut_start_sec": ut_start_sec,
+        "observation_start": observation_start,
+        "observation_end": observation_end,
+    }
+    if parts is not None:
         meta |= {
             "station": parts.station,
             "date": parts.date_yyyymmdd,
             "time": parts.time_hhmmss,
             "focus": parts.focus,
         }
-    except InvalidFilenameError:
-        # Filename parsing is optional, continue without metadata
-        pass
 
     return DynamicSpectrum(data=data, freqs_mhz=freqs, time_s=time_s, source=path, meta=meta)

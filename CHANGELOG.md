@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
+
+### Added
+
+- `combine_time(..., timeline="actual")`:
+  - Preserves real offsets between segment start times using FITS header timestamps
+    or e-CALLISTO filename timestamps.
+  - Records `meta["combined"]["timeline"]` and `segment_offsets_s` for the merged result.
+- `read_fits(...)` now stores absolute observation timestamps in metadata:
+  - `meta["observation_start"]`
+  - `meta["observation_end"]`
+- `DynamicSpectrum.start_datetime` and `DynamicSpectrum.end_datetime` convenience properties.
+
+### Changed
+
+- Time combination still defaults to backward-compatible contiguous behavior, but now
+  supports an explicit actual-timeline mode for scientifically accurate gaps/offsets.
+- Test fixtures now derive `DATE-OBS` / `TIME-OBS` from e-CALLISTO-style filenames
+  so integration tests exercise realistic timestamp metadata.
+
+## 1.1.0
 
 ### Added
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -58,6 +59,18 @@ class DynamicSpectrum:
     def duration_s(self) -> float:
         """Total observation duration in seconds."""
         return float(self.time_s[-1] - self.time_s[0])
+
+    @property
+    def start_datetime(self) -> datetime | None:
+        """Observation start datetime in UTC when available."""
+        value = self.meta.get("observation_start")
+        return value if isinstance(value, datetime) else None
+
+    @property
+    def end_datetime(self) -> datetime | None:
+        """Observation end datetime in UTC when available."""
+        value = self.meta.get("observation_end")
+        return value if isinstance(value, datetime) else None
 
     @property
     def freq_range_mhz(self) -> tuple[float, float]:
