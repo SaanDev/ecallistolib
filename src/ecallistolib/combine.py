@@ -197,13 +197,15 @@ def combine_time(
     if ds0.time_s.size == 0:
         raise CombineError("Cannot combine spectra with empty time axis.")
 
-    combined_data = ds0.data
-    combined_time = ds0.time_s
+    data_list = [ds0.data]
+    time_list = [ds0.time_s]
     freqs = ds0.freqs_mhz
     segment_offsets_s = [0.0]
     base_observation_start = ds0.start_datetime if timeline == "actual" else None
     if timeline == "actual":
         base_observation_start = _require_observation_start(ds0, paths[0])
+
+    last_time = ds0.time_s[-1] if ds0.time_s.size > 0 else 0.0
 
     for p in paths[1:]:
         try:
@@ -221,22 +223,29 @@ def combine_time(
             assert base_observation_start is not None
             start_offset_s = float((observation_start - base_observation_start).total_seconds())
             adjusted_time = ds.time_s + start_offset_s
+            if adjusted_time.size > 0:
+                last_time = adjusted_time[-1]
         else:
             if ds.time_s.size > 1:
                 dt = float(ds.time_s[1] - ds.time_s[0])
             else:
                 dt = 1.0
 
-            shift = float(combined_time[-1] + dt)
+            shift = float(last_time + dt)
             if normalize_segment_time:
                 adjusted_time = (ds.time_s - float(ds.time_s[0])) + shift
             else:
                 adjusted_time = ds.time_s + shift
             start_offset_s = float(shift)
+            if adjusted_time.size > 0:
+                last_time = adjusted_time[-1]
 
-        combined_data = np.concatenate([combined_data, ds.data], axis=1)
-        combined_time = np.concatenate([combined_time, adjusted_time])
+        data_list.append(ds.data)
+        time_list.append(adjusted_time)
         segment_offsets_s.append(start_offset_s)
+
+    combined_data = np.concatenate(data_list, axis=1)
+    combined_time = np.concatenate(time_list)
 
     meta = dict(ds0.meta)
     if ds0.start_datetime is not None:
