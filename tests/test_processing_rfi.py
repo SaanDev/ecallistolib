@@ -1,20 +1,9 @@
 import numpy as np
 from ecallistolib.models import DynamicSpectrum
-<<<<<<< HEAD
-<<<<<<< HEAD
-from ecallistolib.processing import mitigate_rfi_mad
+from ecallistolib.processing import mitigate_rfi, mitigate_rfi_mad
 
-def test_mitigate_rfi_mad():
-=======
-from ecallistolib.processing import mitigate_rfi
 
-def test_mitigate_rfi():
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
-from ecallistolib.processing import mitigate_rfi
-
-def test_mitigate_rfi():
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
+def _sample_spiky_spectrum() -> DynamicSpectrum:
     data = np.zeros((2, 100))
     # Add some noise
     np.random.seed(42)
@@ -32,15 +21,13 @@ def test_mitigate_rfi():
         meta={}
     )
 
-<<<<<<< HEAD
-<<<<<<< HEAD
+    return ds
+
+
+def test_mitigate_rfi_mad():
+    ds = _sample_spiky_spectrum()
+
     processed = mitigate_rfi_mad(ds, threshold=5.0)
-=======
-    processed = mitigate_rfi(ds)
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
-    processed = mitigate_rfi(ds)
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 
     # Spike should be gone, replaced by something close to 0 (median)
     assert processed.data[0, 50] < 5.0
@@ -48,12 +35,18 @@ def test_mitigate_rfi():
 
     # Metadata should be recorded
     assert "rfi_mitigation" in processed.meta
-<<<<<<< HEAD
-<<<<<<< HEAD
     assert processed.meta["rfi_mitigation"]["method"] == "mad_clipping"
-=======
+
+
+def test_mitigate_rfi():
+    ds = _sample_spiky_spectrum()
+
+    processed = mitigate_rfi(ds)
+
+    # Spike should be gone, replaced by something close to 0 (median)
+    assert processed.data[0, 50] < 5.0
+    assert processed.data[1, 50] < 5.0
+
+    # Metadata should be recorded
+    assert "rfi_mitigation" in processed.meta
     assert processed.meta["rfi_mitigation"]["method"] == "clean_rfi"
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
-    assert processed.meta["rfi_mitigation"]["method"] == "clean_rfi"
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913

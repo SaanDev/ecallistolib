@@ -120,8 +120,6 @@ def noise_reduce_median_clip(
     }
     return ds.copy_with(data=data, meta=meta)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 def mitigate_rfi_mad(
     ds: DynamicSpectrum,
     threshold: float = 3.0,
@@ -179,12 +177,6 @@ def mitigate_rfi_mad(
         "threshold": threshold,
     }
     return ds.copy_with(data=data, meta=meta)
-=======
-
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
-
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 
 
 def background_subtract_frequency(ds: DynamicSpectrum) -> DynamicSpectrum:
@@ -210,11 +202,6 @@ def background_subtract_frequency(ds: DynamicSpectrum) -> DynamicSpectrum:
     meta = dict(ds.meta)
     meta["processing"] = {"method": "background_subtract_frequency"}
     return ds.copy_with(data=data, meta=meta)
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 
 
 
@@ -246,9 +233,15 @@ def _ensure_odd(v: int) -> int:
     return out
 
 def _median2d(arr: np.ndarray, kernel_freq: int, kernel_time: int) -> np.ndarray:
+    kernel_freq = _ensure_odd(kernel_freq)
+    kernel_time = _ensure_odd(kernel_time)
     if _median_filter is None:
-        return arr.copy()
-    return _median_filter(arr, size=(_ensure_odd(kernel_freq), _ensure_odd(kernel_time)), mode="nearest")
+        pad_freq = kernel_freq // 2
+        pad_time = kernel_time // 2
+        padded = np.pad(arr, ((pad_freq, pad_freq), (pad_time, pad_time)), mode="edge")
+        windows = np.lib.stride_tricks.sliding_window_view(padded, (kernel_freq, kernel_time))
+        return np.nanmedian(windows, axis=(-2, -1))
+    return _median_filter(arr, size=(kernel_freq, kernel_time), mode="nearest")
 
 def _mask_hot_channels(data: np.ndarray, z_thresh: float) -> list[int]:
     if data.ndim != 2 or data.shape[0] == 0:
@@ -340,7 +333,3 @@ def mitigate_rfi(
         "masked_channel_indices": result.masked_channel_indices,
     }
     return ds.copy_with(data=result.data, meta=meta)
-<<<<<<< HEAD
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913

@@ -5,15 +5,7 @@ import sys
 from .download import list_remote_fits, download_files
 from .io import read_fits
 from .plotting import plot_dynamic_spectrum
-<<<<<<< HEAD
-<<<<<<< HEAD
-from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi_mad
-=======
 from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
-from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 import matplotlib.pyplot as plt
 
 def cmd_download(args):
@@ -37,15 +29,7 @@ def cmd_plot(args):
     ds = read_fits(args.file)
 
     if args.rfi:
-<<<<<<< HEAD
-<<<<<<< HEAD
-        ds = mitigate_rfi_mad(ds, threshold=args.rfi_threshold)
-=======
         ds = mitigate_rfi(ds)
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
-=======
-        ds = mitigate_rfi(ds)
->>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 
     if args.process == "mean":
         ds = noise_reduce_mean_clip(ds, clip_low=args.clip_low, clip_high=args.clip_high)
@@ -85,8 +69,7 @@ def main():
     parser_plot = subparsers.add_parser("plot", help="Plot a FITS file")
     parser_plot.add_argument("file", help="Path to FITS file")
     parser_plot.add_argument("--process", choices=["raw", "mean", "median", "background_subtracted"], default="raw", help="Processing method")
-    parser_plot.add_argument("--rfi", action="store_true", help="Apply RFI mitigation (MAD)")
-    parser_plot.add_argument("--rfi-threshold", type=float, default=3.0, help="MAD threshold for RFI")
+    parser_plot.add_argument("--rfi", action="store_true", help="Apply RFI mitigation")
     parser_plot.add_argument("--clip-low", type=float, default=-5.0, help="Lower clipping threshold (required for mean/median)")
     parser_plot.add_argument("--clip-high", type=float, default=20.0, help="Upper clipping threshold (required for mean/median)")
     parser_plot.add_argument("--cmap", default="inferno", help="Colormap")
