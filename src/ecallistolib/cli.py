@@ -6,7 +6,11 @@ from .download import list_remote_fits, download_files
 from .io import read_fits
 from .plotting import plot_dynamic_spectrum
 <<<<<<< HEAD
+<<<<<<< HEAD
 from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi_mad
+=======
+from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 =======
 from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi
 >>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
@@ -34,7 +38,11 @@ def cmd_plot(args):
 
     if args.rfi:
 <<<<<<< HEAD
+<<<<<<< HEAD
         ds = mitigate_rfi_mad(ds, threshold=args.rfi_threshold)
+=======
+        ds = mitigate_rfi(ds)
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 =======
         ds = mitigate_rfi(ds)
 >>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
