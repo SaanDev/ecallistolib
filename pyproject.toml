@@ -37,3 +37,6 @@ testpaths = ["tests"]
 [project.urls]
 Homepage = "https://github.com/saandev/ecallistolib"
 Issues = "https://github.com/saandev/ecallistolib/issues"
+
+[project.scripts]
+ecallisto = "ecallistolib.cli:main"

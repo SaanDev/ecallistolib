@@ -115,3 +115,6 @@ def __getattr__(name: str):
         return background_subtract
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+from .processing import background_subtract_frequency, mitigate_rfi_mad
+
+__all__ = list(__all__) + ["background_subtract_frequency", "mitigate_rfi_mad"]
