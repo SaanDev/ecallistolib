@@ -19,7 +19,11 @@ from .exceptions import (
 )
 from .io import CallistoFileParts, parse_callisto_filename, read_fits
 from .models import DynamicSpectrum
+<<<<<<< HEAD
 from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, background_subtract_frequency, mitigate_rfi_mad
+=======
+from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, background_subtract_frequency, mitigate_rfi
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 from .crop import crop, crop_frequency, crop_time, slice_by_index
 
 try:
@@ -116,4 +120,8 @@ def __getattr__(name: str):
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+<<<<<<< HEAD
 __all__ = list(__all__) + ["background_subtract_frequency", "mitigate_rfi_mad"]
+=======
+__all__ = list(__all__) + ["background_subtract_frequency", "mitigate_rfi"]
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913

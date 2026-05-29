@@ -27,6 +27,7 @@ dependencies = [
 [project.optional-dependencies]
 download = ["requests>=2.31", "beautifulsoup4>=4.12"]
 plot = ["matplotlib>=3.7"]
+rfi = ["scipy>=1.10.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

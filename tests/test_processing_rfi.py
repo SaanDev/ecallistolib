@@ -1,8 +1,14 @@
 import numpy as np
 from ecallistolib.models import DynamicSpectrum
+<<<<<<< HEAD
 from ecallistolib.processing import mitigate_rfi_mad
 
 def test_mitigate_rfi_mad():
+=======
+from ecallistolib.processing import mitigate_rfi
+
+def test_mitigate_rfi():
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
     data = np.zeros((2, 100))
     # Add some noise
     np.random.seed(42)
@@ -20,7 +26,11 @@ def test_mitigate_rfi_mad():
         meta={}
     )
 
+<<<<<<< HEAD
     processed = mitigate_rfi_mad(ds, threshold=5.0)
+=======
+    processed = mitigate_rfi(ds)
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
 
     # Spike should be gone, replaced by something close to 0 (median)
     assert processed.data[0, 50] < 5.0
@@ -28,4 +38,8 @@ def test_mitigate_rfi_mad():
 
     # Metadata should be recorded
     assert "rfi_mitigation" in processed.meta
+<<<<<<< HEAD
     assert processed.meta["rfi_mitigation"]["method"] == "mad_clipping"
+=======
+    assert processed.meta["rfi_mitigation"]["method"] == "clean_rfi"
+>>>>>>> origin/feature/improvements-rfi-cli-11159646905103801913
