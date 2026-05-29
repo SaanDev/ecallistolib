@@ -188,7 +188,7 @@ def _resolve_clip_limits(
         raise ValueError("clip_low and clip_high must be provided together.")
 
     if has_low and has_high:
-        return float(clip_low), float(clip_high)
+        return float(cast(float, clip_low)), float(cast(float, clip_high))
 
     if clip_percentiles is None:
         return None, None

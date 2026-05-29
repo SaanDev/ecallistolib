@@ -19,7 +19,7 @@ from .exceptions import (
 )
 from .io import CallistoFileParts, parse_callisto_filename, read_fits
 from .models import DynamicSpectrum
-from .processing import noise_reduce_mean_clip, noise_reduce_median_clip
+from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, background_subtract_frequency, mitigate_rfi
 from .crop import crop, crop_frequency, crop_time, slice_by_index
 
 try:
@@ -115,3 +115,5 @@ def __getattr__(name: str):
         return background_subtract
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+__all__ = list(__all__) + ["background_subtract_frequency", "mitigate_rfi"]
