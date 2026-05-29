@@ -1,6 +1,5 @@
 import argparse
 from datetime import date
-from pathlib import Path
 import sys
 
 from .download import list_remote_fits, download_files

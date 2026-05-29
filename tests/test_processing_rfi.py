@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from ecallistolib.models import DynamicSpectrum
 from ecallistolib.processing import mitigate_rfi_mad
 
