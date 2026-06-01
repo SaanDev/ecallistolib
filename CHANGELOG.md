@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.3.0
+
+### Added
+
+- `mitigate_rfi(ds, kernel_time, kernel_freq, channel_z_threshold, percentile_clip)`:
+  - Multi-step RFI cleaning pipeline: 2D median filtering, hot-channel detection
+    via robust Z-scores, channel repair by neighbor interpolation, and per-channel
+    percentile clipping.
+  - Records full pipeline parameters and `masked_channel_indices` in
+    `meta["rfi_mitigation"]`.
+- `mitigate_rfi_mad(ds, threshold)`:
+  - MAD-based outlier replacement per frequency channel.
+- `background_subtract_frequency(ds)`:
+  - Subtract mean over frequency for each time column to mitigate broad-band
+    noise at individual time steps.
+- `clean_rfi(data, ...)`:
+  - Low-level RFI cleaning function operating on raw NumPy arrays, returning
+    `RFIResult` dataclass.
+- **CLI** (`ecallisto` command):
+  - `ecallisto download` — download FITS files from the e-CALLISTO archive.
+  - `ecallisto plot` — plot a FITS file with optional `--rfi` flag and
+    selectable processing modes (`raw`, `mean`, `median`, `background_subtracted`).
+- New optional dependency group `[rfi]` for SciPy (`scipy>=1.10.0`).
+
+### Changed
+
+- `combine_time()` refactored to use batch `np.concatenate` instead of
+  incremental array growth, improving performance for large multi-segment merges.
+
 ## 1.2.0
 
 ### Added

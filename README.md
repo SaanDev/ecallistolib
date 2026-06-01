@@ -9,15 +9,13 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 
 ---
 
-## 🆕 What's New in v1.2.0
+## 🆕 What's New in v1.3.1
 
-- **Timestamp-aware time combination** — `combine_time(..., timeline="actual")` preserves real offsets between observation segments.
-- **Observation datetime metadata** — `read_fits()` now records `observation_start` / `observation_end`, with `DynamicSpectrum.start_datetime` and `.end_datetime` convenience properties.
-- **Richer time-combine metadata** — merged spectra now record `meta["combined"]["timeline"]` and `segment_offsets_s`.
-- **Download reliability + ergonomics** — `download_files(..., workers=..., retries=..., retry_backoff_s=..., overwrite=...)`.
-- **Plotting UX upgrades** — `clip_percentiles=(low, high)` and direct export via `save_path` + `savefig_kwargs`.
-- **Runtime support expansion** — officially supported Python versions are now `3.10-3.14`.
-- **Stability-first defaults preserved** — `combine_time()` still defaults to contiguous legacy-compatible behavior unless you opt into `timeline="actual"`.
+- **RFI mitigation** — Two new functions to remove Radio Frequency Interference: `mitigate_rfi()` (2D median-filter pipeline with hot-channel masking and percentile clipping) and `mitigate_rfi_mad()` (MAD-based outlier replacement).
+- **Frequency-axis background subtraction** — `background_subtract_frequency()` removes broad-band noise that affects all frequencies at a single time step.
+- **Command-line interface** — New `ecallisto` CLI with `download` and `plot` subcommands for quick terminal workflows (includes `--rfi` flag for on-the-fly RFI cleaning).
+- **New optional dependency group** — `pip install ecallistolib[rfi]` installs SciPy for accelerated median-filter-based RFI mitigation.
+- **Faster time combination** — `combine_time()` now uses batch concatenation instead of incremental array growth, improving performance for large multi-segment merges.
 
 ---
 
@@ -30,14 +28,17 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
   - [Reading FITS Files](#reading-fits-files)
   - [Downloading Data](#downloading-data)
   - [Processing Data](#processing-data)
+  - [RFI Mitigation](#rfi-mitigation)
   - [Cropping & Slicing](#cropping--slicing)
   - [Combining Spectra](#combining-spectra)
   - [Plotting](#plotting)
+- [CLI](#cli)
 - [API Reference](#api-reference)
   - [DynamicSpectrum](#dynamicspectrum)
   - [I/O Functions](#io-functions)
   - [Download Functions](#download-functions)
   - [Processing Functions](#processing-functions)
+  - [RFI Mitigation Functions](#rfi-mitigation-functions)
   - [Cropping Functions](#cropping-functions)
   - [Combine Functions](#combine-functions)
   - [Plotting Functions](#plotting-functions)
@@ -54,12 +55,14 @@ A Python library to **download**, **read**, **process**, and **plot** e-CALLISTO
 - 📖 **Read** – Parse e-CALLISTO FITS files (`.fit`, `.fit.gz`) into structured Python objects
 - 🕓 **Observation Datetimes** – Preserve absolute start/end timestamps when FITS headers or filenames provide them
 - 🔧 **Process** – Apply noise reduction techniques (mean subtraction, clipping, scaling)
+- 📡 **RFI Mitigation** – Remove Radio Frequency Interference with MAD-based and median-filter pipelines
 - ✂️ **Crop** – Extract frequency and time ranges from spectra
 - 🔗 **Combine** – Merge multiple spectra along the time or frequency axis, including timestamp-aware time merges
 - 📊 **Plot** – Generate publication-ready dynamic spectrum visualizations
 - 🕒 **Time Precision Control** – Convert seconds to UT in `HH:MM` or `HH:MM:SS`
 - ⚡ **Efficient I/O** – Stream downloads and optimize multi-day remote listing queries
 - 🛡️ **Reliability Enhancements** – Stricter parsing, typed combine failures, and safer metadata copying
+- 💻 **CLI** – `ecallisto` command-line tool for downloading and plotting without writing Python
 - ⚠️ **Error Handling** – Custom exceptions for robust error management
 
 ---
@@ -81,6 +84,12 @@ Install optional features as needed:
 
 ```bash
 pip install ecallistolib"[download,plot]"
+
+# For RFI mitigation (requires SciPy)
+pip install ecallistolib"[rfi]"
+
+# Install all optional dependencies
+pip install ecallistolib"[download,plot,rfi]"
 ```
 ### From Source (Development)
 
@@ -101,8 +110,11 @@ pip install -e ".[download]"
 # For plotting
 pip install -e ".[plot]"
 
+# For RFI mitigation (requires SciPy)
+pip install -e ".[rfi]"
+
 # Install all optional dependencies
-pip install -e ".[download,plot]"
+pip install -e ".[download,plot,rfi]"
 ```
 
 ---
@@ -307,6 +319,82 @@ cleaned = ecl.noise_reduce_median_clip(
 
 # Metadata shows the method used
 print(cleaned.meta["noise_reduction"]["method"])  # 'median_subtract_clip'
+```
+
+---
+
+### RFI Mitigation
+
+Remove Radio Frequency Interference (RFI) from dynamic spectra. Two approaches are available:
+
+#### Median-Filter Pipeline (Recommended)
+
+A multi-step pipeline that applies 2D median filtering, detects and repairs hot channels, and clips residual outliers:
+
+```python
+import ecallistolib as ecl
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Apply full RFI mitigation pipeline
+cleaned = ecl.mitigate_rfi(
+    spectrum,
+    kernel_time=3,             # Median filter kernel size (time axis)
+    kernel_freq=3,             # Median filter kernel size (frequency axis)
+    channel_z_threshold=6.0,   # Z-score threshold for hot-channel detection
+    percentile_clip=99.5,      # Upper percentile clip per channel
+)
+
+# Check which channels were flagged
+print(cleaned.meta["rfi_mitigation"]["masked_channel_indices"])
+```
+
+> **Note:** For best performance, install the `[rfi]` optional dependency (`pip install ecallistolib[rfi]`) which provides SciPy's optimized `median_filter`. A pure-NumPy fallback is used automatically when SciPy is not available.
+
+#### MAD-Based Outlier Replacement
+
+A simpler approach that uses the Median Absolute Deviation (MAD) to detect and replace impulsive spikes per frequency channel:
+
+```python
+import ecallistolib as ecl
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Replace outlier spikes with channel medians
+cleaned = ecl.mitigate_rfi_mad(spectrum, threshold=3.0)
+
+print(cleaned.meta["rfi_mitigation"])
+# {'method': 'mad_clipping', 'threshold': 3.0}
+```
+
+#### Frequency-Axis Background Subtraction
+
+Remove broad-band noise that affects all frequencies at a single time step:
+
+```python
+import ecallistolib as ecl
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Subtract mean over frequency for each time column
+cleaned = ecl.background_subtract_frequency(spectrum)
+```
+
+#### Combining RFI Mitigation with Noise Reduction
+
+```python
+import ecallistolib as ecl
+
+spectrum = ecl.read_fits("my_spectrum.fit.gz")
+
+# Step 1: Remove RFI
+cleaned = ecl.mitigate_rfi(spectrum)
+
+# Step 2: Apply noise reduction
+processed = ecl.noise_reduce_mean_clip(cleaned, clip_low=-5.0, clip_high=20.0)
+
+# Step 3: Plot
+fig, ax, im = ecl.plot_dynamic_spectrum(processed, cmap="inferno")
 ```
 
 ---
@@ -635,6 +723,57 @@ plt.show()
 
 ---
 
+## CLI
+
+The `ecallisto` command-line tool provides quick access to downloading and plotting without writing Python scripts.
+
+### Installation
+
+The CLI is available automatically when you install ecallistolib:
+
+```bash
+pip install ecallistolib[download,plot]
+```
+
+### Download Files
+
+```bash
+# Download FITS files for a specific station, date, and hour
+ecallisto download --date 2023-06-15 --hour 14 --station alaska --out-dir ./data
+```
+
+| Argument | Description |
+|----------|-------------|
+| `--date` | Date in `YYYY-MM-DD` format (required) |
+| `--hour` | UTC hour 0–23 (required) |
+| `--station` | Case-insensitive station substring (required) |
+| `--out-dir` | Output directory (default: `./data`) |
+
+### Plot a FITS File
+
+```bash
+# Plot raw spectrum
+ecallisto plot my_spectrum.fit.gz
+
+# Plot with noise reduction and RFI mitigation
+ecallisto plot my_spectrum.fit.gz --process mean --rfi --save output.png
+
+# Plot with median-based noise reduction and custom colormap
+ecallisto plot my_spectrum.fit.gz --process median --clip-low -3 --clip-high 15 --cmap plasma
+```
+
+| Argument | Description |
+|----------|-------------|
+| `file` | Path to FITS file (required) |
+| `--process` | Processing mode: `raw`, `mean`, `median`, or `background_subtracted` (default: `raw`) |
+| `--rfi` | Apply RFI mitigation before processing |
+| `--clip-low` | Lower clipping threshold (default: `-5.0`) |
+| `--clip-high` | Upper clipping threshold (default: `20.0`) |
+| `--cmap` | Matplotlib colormap (default: `inferno`) |
+| `--save` | Save plot to file instead of displaying interactively |
+
+---
+
 ## API Reference
 
 ### DynamicSpectrum
@@ -797,6 +936,55 @@ Apply noise reduction via median subtraction and clipping (new in v1.0.0). More 
 | `scale` | `float \| None` | `~3.88` | Scaling factor (`None` to disable) |
 
 **Returns:** New `DynamicSpectrum` with processed data and updated metadata.
+
+---
+
+### RFI Mitigation Functions
+
+#### `mitigate_rfi(ds, kernel_time=3, kernel_freq=3, channel_z_threshold=6.0, percentile_clip=99.5) → DynamicSpectrum`
+
+Apply a multi-step RFI cleaning pipeline: 2D median filtering, hot-channel detection and repair, and per-channel percentile clipping.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ds` | `DynamicSpectrum` | — | Input spectrum |
+| `kernel_time` | `int` | `3` | Median filter kernel size along time axis |
+| `kernel_freq` | `int` | `3` | Median filter kernel size along frequency axis |
+| `channel_z_threshold` | `float` | `6.0` | Robust Z-score threshold for hot-channel detection |
+| `percentile_clip` | `float` | `99.5` | Upper percentile clip per channel |
+
+**Returns:** New `DynamicSpectrum` with RFI mitigated and metadata recording `method`, kernel sizes, threshold, and `masked_channel_indices`.
+
+---
+
+#### `mitigate_rfi_mad(ds, threshold=3.0) → DynamicSpectrum`
+
+Mitigate RFI using Median Absolute Deviation (MAD). Detects impulsive spikes per frequency channel and replaces them with the channel median.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ds` | `DynamicSpectrum` | — | Input spectrum |
+| `threshold` | `float` | `3.0` | Number of MADs above median to flag as outlier |
+
+**Returns:** New `DynamicSpectrum` with outlier values replaced.
+
+---
+
+#### `background_subtract_frequency(ds) → DynamicSpectrum`
+
+Subtract mean over frequency for each time column. Removes broad-band noise that appears at a single time step across all frequencies.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ds` | `DynamicSpectrum` | Input spectrum |
+
+**Returns:** New `DynamicSpectrum` with frequency-background subtracted.
+
+---
+
+#### `clean_rfi(data, *, kernel_time=3, kernel_freq=3, channel_z_threshold=6.0, percentile_clip=99.5, enabled=True) → RFIResult`
+
+Low-level RFI cleaning function that operates on raw NumPy arrays. Returns an `RFIResult` dataclass with `data` and `masked_channel_indices`.
 
 ---
 
