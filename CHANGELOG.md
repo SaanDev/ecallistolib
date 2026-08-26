@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+
+- Analyzer 2.8.0-compatible frequency regularization for two or more receiver
+  bands, including nearest-channel mapping, finest-spacing grids, configurable
+  background interpolation/average/hatched/zero gap handling, configurable
+  split/low/high/reject overlaps, and full combination provenance. Background
+  filling is limited to internal gaps bounded by measured bands on both sides.
+- `describe_frequency_combination()` and typed `FrequencyBand`,
+  `FrequencySpan`, and `FrequencyCombinationReport` preflight results.
+- `load_spectra()` with immutable `SpectrumCollection` station/UTC-day groups,
+  one-read orchestration, frequency-then-time ordering, actual UTC offsets, and
+  explicit NaN provenance for missing focus blocks.
+- `GOESXRayData`, array/DataFrame/SunPy/netCDF adapters,
+  `fetch_goes_xray()`, and `fetch_goes_for_spectrum()`.
+- Persistent validated GOES caching, refresh support, retry handling,
+  era-aware GOES-8–19 candidates, explicit satellite selection, cross-midnight
+  windows, and best-coverage selection.
+- `plot_spectrum_with_goes()` and typed `SpectrumGOESPlot` results for
+  logarithmic overlay and shared-UTC stacked layouts. XRS-B panels include
+  A/B/C/M/X flare-class references.
+- `plot_spectrum_with_light_curves()` and typed `SpectrumLightCurvePlot`
+  results for overlaying one or more selected frequency-channel light curves
+  on a dynamic spectrum.
+- A common `dpi` option for dynamic spectra, standalone light curves,
+  spectrum/light-curve overlays, GOES layouts, direct saving, and CLI plots.
+- `[goes]` and `[all]` optional dependency groups, an offline GOES CI job, and
+  `benchmarks/benchmark_v140.py`.
+- A v1.4 tutorial notebook and prioritized `ROADMAP.md`.
+
+### Changed
+
+- NumPy RFI median filtering is memory bounded; channel repair, clipping, and
+  MAD replacement are vectorized/in-place where safe. The 200×3600 benchmark
+  requires at least 25% lower peak allocation with no more than 10% runtime
+  regression.
+- Optional SciPy, plotting, download, and GOES imports remain lazy.
+- CLI mean/median reduction is applied once rather than being processed again
+  during plotting.
+- `read_fits()` retains the small FITS-header subset needed for combination
+  validation.
+- `plot_spectrum_with_goes()` can retrieve the matching official NOAA/NCEI
+  interval when GOES data are omitted. Unavailable network access now raises
+  the specific `GOESConnectionError`.
+
+### Compatibility
+
+- Existing v1.3 APIs and plotting tuple returns remain supported.
+- Python support remains 3.10–3.14.
+
 ## 1.3.0
 
 ### Added

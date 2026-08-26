@@ -19,7 +19,28 @@ from ecallistolib.plotting import (
     plot_raw_spectrum,
     plot_background_subtracted,
     plot_light_curve,
+    plot_spectrum_with_light_curves,
 )
+
+
+def test_hatched_frequency_gaps_are_rendered():
+    spectrum = DynamicSpectrum(
+        data=np.array([[1.0, 2.0], [np.nan, np.nan], [3.0, 4.0]]),
+        freqs_mhz=np.array([30.0, 20.0, 10.0]),
+        time_s=np.array([0.0, 1.0]),
+        meta={
+            "combined": {
+                "gap_fill": "hatched",
+                "gap_row_mask": np.array([False, True, False]),
+            }
+        },
+    )
+
+    fig, ax, _image = plot_dynamic_spectrum(spectrum, show_colorbar=False)
+
+    assert len(ax.patches) == 1
+    assert ax.patches[0].get_hatch() == "////"
+    plt.close(fig)
 
 
 @pytest.fixture
@@ -94,6 +115,15 @@ class TestPlotDynamicSpectrum:
         assert fig.get_figwidth() == 12
         assert fig.get_figheight() == 6
         plt.close(fig)
+
+    def test_custom_dpi(self, sample_ds):
+        fig, _ax, _im = plot_dynamic_spectrum(sample_ds, dpi=240)
+        assert fig.dpi == pytest.approx(240)
+        plt.close(fig)
+
+    def test_invalid_dpi(self, sample_ds):
+        with pytest.raises(ValueError, match="dpi must be"):
+            plot_dynamic_spectrum(sample_ds, dpi=0)
 
     def test_custom_clip_low_clip_high(self, sample_ds):
         fig, ax, im = plot_dynamic_spectrum(sample_ds, clip_low=10, clip_high=90)
@@ -242,6 +272,11 @@ class TestPlotRawSpectrum:
         assert im.get_clim() == (0, 50)
         plt.close(fig)
 
+    def test_custom_dpi(self, sample_ds):
+        fig, _ax, _im = plot_raw_spectrum(sample_ds, dpi=210)
+        assert fig.dpi == pytest.approx(210)
+        plt.close(fig)
+
     def test_save_path_writes_figure(self, sample_ds, tmp_path):
         out = tmp_path / "raw.png"
         fig, ax, im = plot_raw_spectrum(sample_ds, save_path=out)
@@ -270,6 +305,11 @@ class TestPlotBackgroundSubtracted:
             sample_ds, clip_low=-20, clip_high=20, figsize=(8, 4)
         )
         assert im.get_clim() == (-20, 20)
+        plt.close(fig)
+
+    def test_custom_dpi(self, sample_ds):
+        fig, _ax, _im = plot_background_subtracted(sample_ds, dpi=220)
+        assert fig.dpi == pytest.approx(220)
         plt.close(fig)
 
     def test_clip_percentiles_supported(self, sample_ds):
@@ -370,6 +410,18 @@ class TestPlotLightCurve:
         assert fig.get_figheight() == 6
         plt.close(fig)
 
+    def test_custom_dpi_and_save(self, sample_ds, tmp_path):
+        output = tmp_path / "light_curve.png"
+        fig, _ax, _line = plot_light_curve(
+            sample_ds,
+            frequency_mhz=150,
+            dpi=230,
+            save_path=output,
+        )
+        assert fig.dpi == pytest.approx(230)
+        assert output.exists()
+        plt.close(fig)
+
     def test_custom_title(self, sample_ds):
         """Test custom title."""
         fig, ax, line = plot_light_curve(
@@ -403,3 +455,47 @@ class TestPlotLightCurve:
         # Should not raise any error
         assert fig is not None
         plt.close(fig)
+
+
+class TestSpectrumLightCurveOverlay:
+    def test_multiple_light_curves_overlay_spectrum(self, sample_ds):
+        result = plot_spectrum_with_light_curves(
+            sample_ds,
+            frequencies_mhz=[120, 180],
+            process="background_subtracted",
+            time_format="ut",
+            dpi=250,
+        )
+
+        assert result.figure.dpi == pytest.approx(250)
+        assert len(result.lines) == 2
+        assert len(result.frequencies_mhz) == 2
+        assert len(result.spectrum_ax.lines) == 2
+        assert result.light_curve_ax.get_xlim() == pytest.approx(
+            result.spectrum_ax.get_xlim()
+        )
+        assert "intensity" in result.light_curve_ax.get_ylabel().lower()
+        plt.close(result.figure)
+
+    def test_single_frequency_and_save(self, sample_ds, tmp_path):
+        output = tmp_path / "spectrum_light_curve.png"
+        result = plot_spectrum_with_light_curves(
+            sample_ds,
+            frequencies_mhz=150,
+            dpi=200,
+            save_path=output,
+            line_kwargs={"linewidth": 2.5},
+        )
+
+        assert len(result.lines) == 1
+        assert result.lines[0].get_linewidth() == pytest.approx(2.5)
+        assert output.exists()
+        plt.close(result.figure)
+
+    def test_empty_frequency_list_is_rejected(self, sample_ds):
+        with pytest.raises(ValueError, match="at least one"):
+            plot_spectrum_with_light_curves(sample_ds, frequencies_mhz=[])
+
+    def test_out_of_range_frequency_is_rejected(self, sample_ds):
+        with pytest.raises(FrequencyOutOfRangeError, match="outside"):
+            plot_spectrum_with_light_curves(sample_ds, frequencies_mhz=[150, 300])

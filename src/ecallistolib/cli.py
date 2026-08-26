@@ -2,13 +2,9 @@ import argparse
 from datetime import date
 import sys
 
-from .download import list_remote_fits, download_files
-from .io import read_fits
-from .plotting import plot_dynamic_spectrum
-from .processing import noise_reduce_mean_clip, noise_reduce_median_clip, mitigate_rfi
-import matplotlib.pyplot as plt
-
 def cmd_download(args):
+    from .download import download_files, list_remote_fits
+
     try:
         d = date.fromisoformat(args.date)
     except ValueError:
@@ -26,6 +22,12 @@ def cmd_download(args):
         print(f"Downloaded: {p}")
 
 def cmd_plot(args):
+    import matplotlib.pyplot as plt
+
+    from .io import read_fits
+    from .plotting import plot_dynamic_spectrum
+    from .processing import mitigate_rfi, noise_reduce_mean_clip, noise_reduce_median_clip
+
     ds = read_fits(args.file)
 
     if args.rfi:
@@ -33,23 +35,25 @@ def cmd_plot(args):
 
     if args.process == "mean":
         ds = noise_reduce_mean_clip(ds, clip_low=args.clip_low, clip_high=args.clip_high)
-        proc_mode = "noise_reduced"
+        proc_mode = "raw"
     elif args.process == "median":
         ds = noise_reduce_median_clip(ds, clip_low=args.clip_low, clip_high=args.clip_high)
-        proc_mode = "noise_reduced"
-    else:
         proc_mode = "raw"
+    else:
+        proc_mode = args.process
 
     fig, ax, im = plot_dynamic_spectrum(
         ds,
-        process=proc_mode if args.process in ("mean", "median") else args.process,
-        clip_low=args.clip_low if proc_mode == "noise_reduced" else None,
-        clip_high=args.clip_high if proc_mode == "noise_reduced" else None,
-        cmap=args.cmap
+        process=proc_mode,
+        clip_low=None,
+        clip_high=None,
+        cmap=args.cmap,
+        dpi=getattr(args, "dpi", 150.0),
+        save_path=args.save,
+        savefig_kwargs={"bbox_inches": "tight"} if args.save else None,
     )
 
     if args.save:
-        plt.savefig(args.save, dpi=150, bbox_inches="tight")
         print(f"Plot saved to {args.save}")
     else:
         plt.show()
@@ -73,6 +77,7 @@ def main():
     parser_plot.add_argument("--clip-low", type=float, default=-5.0, help="Lower clipping threshold (required for mean/median)")
     parser_plot.add_argument("--clip-high", type=float, default=20.0, help="Upper clipping threshold (required for mean/median)")
     parser_plot.add_argument("--cmap", default="inferno", help="Colormap")
+    parser_plot.add_argument("--dpi", type=float, default=150.0, help="Plot resolution")
     parser_plot.add_argument("--save", help="Path to save the plot image (if not set, shows interactive plot)")
 
     args = parser.parse_args()

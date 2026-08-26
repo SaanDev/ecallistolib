@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, cast
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Optional, Sequence, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -127,6 +128,29 @@ class TimeAxisConverter:
         return cls(ut_start_sec=float(ut_start))
 
 
+@dataclass(frozen=True)
+class SpectrumGOESPlot:
+    """Artists returned by :func:`plot_spectrum_with_goes`."""
+
+    figure: "Figure"
+    spectrum_ax: "Axes"
+    goes_axes: Mapping[str, "Axes"]
+    image: "AxesImage"
+    layout: Literal["overlay", "stacked"]
+
+
+@dataclass(frozen=True)
+class SpectrumLightCurvePlot:
+    """Artists returned by :func:`plot_spectrum_with_light_curves`."""
+
+    figure: "Figure"
+    spectrum_ax: "Axes"
+    light_curve_ax: "Axes"
+    image: "AxesImage"
+    lines: tuple["plt.Line2D", ...]
+    frequencies_mhz: tuple[float, ...]
+
+
 def _compute_extent(
     ds: DynamicSpectrum,
     time_format: Literal["seconds", "ut"],
@@ -207,13 +231,27 @@ def _save_figure_if_requested(
     fig: Figure,
     save_path: str | Path | None,
     savefig_kwargs: dict[str, Any] | None,
+    dpi: float | None = None,
 ) -> None:
     """Save figure when a target path is provided."""
     if save_path is None:
         return
     target = Path(save_path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(target, **(savefig_kwargs or {}))
+    options = dict(savefig_kwargs or {})
+    if dpi is not None:
+        options.setdefault("dpi", dpi)
+    fig.savefig(target, **options)
+
+
+def _set_figure_dpi(fig: Figure, dpi: float | None) -> None:
+    """Apply a positive display/export DPI to a figure."""
+    if dpi is None:
+        return
+    value = float(dpi)
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError("dpi must be a positive finite number.")
+    fig.set_dpi(value)
 
 
 # Conversion factor for Digits to dB (pseudo-calibration)
@@ -230,6 +268,7 @@ def plot_dynamic_spectrum(
     title: str | None = None,
     cmap: str = "inferno",
     figsize: tuple[float, float] | None = None,
+    dpi: float | None = None,
     ax: Optional[plt.Axes] = None,
     show_colorbar: bool = True,
     time_format: Literal["seconds", "ut"] = "seconds",
@@ -267,6 +306,8 @@ def plot_dynamic_spectrum(
         Matplotlib colormap name (e.g., "inferno", "viridis", "jet").
     figsize : tuple[float, float] | None
         Figure size as (width, height) in inches. Ignored if ax is provided.
+    dpi : float | None
+        Figure display DPI and default saved-image DPI. Must be positive.
     ax : plt.Axes | None
         Existing axes to plot on. If None, creates a new figure.
     show_colorbar : bool
@@ -355,6 +396,7 @@ def plot_dynamic_spectrum(
         fig, ax = plt.subplots(figsize=figsize)
     else:
         fig = cast("Figure", ax.figure)
+    _set_figure_dpi(fig, dpi)
 
     extent, converter = _compute_extent(ds, time_format)
 
@@ -377,6 +419,39 @@ def plot_dynamic_spectrum(
         vmax=vmax,
         **imshow_kwargs,
     )
+    combined_meta = ds.meta.get("combined", {})
+    if isinstance(combined_meta, dict) and combined_meta.get("gap_fill") == "hatched":
+        raw_mask = combined_meta.get("gap_row_mask")
+        if raw_mask is not None:
+            gap_mask = np.asarray(raw_mask, dtype=bool).ravel()
+            if gap_mask.size == ds.freqs_mhz.size and np.any(gap_mask):
+                freqs = np.asarray(ds.freqs_mhz, dtype=float)
+                if freqs.size > 1:
+                    edges = np.empty(freqs.size + 1, dtype=float)
+                    edges[1:-1] = 0.5 * (freqs[:-1] + freqs[1:])
+                    edges[0] = freqs[0] + 0.5 * (freqs[0] - freqs[1])
+                    edges[-1] = freqs[-1] + 0.5 * (freqs[-1] - freqs[-2])
+                else:
+                    edges = np.array([freqs[0] + 0.5, freqs[0] - 0.5])
+                index = 0
+                while index < gap_mask.size:
+                    if not gap_mask[index]:
+                        index += 1
+                        continue
+                    start = index
+                    while index < gap_mask.size and gap_mask[index]:
+                        index += 1
+                    low, high = sorted((float(edges[start]), float(edges[index])))
+                    ax.axhspan(
+                        low,
+                        high,
+                        facecolor="0.75",
+                        edgecolor="0.45",
+                        hatch="////",
+                        alpha=0.45,
+                        linewidth=0.0,
+                        zorder=3,
+                    )
     # Use filename-based title if not provided
     if title is None:
         title = _get_filename_title(ds, title_suffix)
@@ -391,7 +466,7 @@ def plot_dynamic_spectrum(
         else:
             cbar.set_label("Intensity [Digits]")
 
-    _save_figure_if_requested(fig, save_path, savefig_kwargs)
+    _save_figure_if_requested(fig, save_path, savefig_kwargs, dpi)
 
     return fig, ax, im
 
@@ -401,6 +476,7 @@ def plot_raw_spectrum(
     title: str | None = None,
     cmap: str = "viridis",
     figsize: tuple[float, float] | None = None,
+    dpi: float | None = None,
     clip_low: float | None = None,
     clip_high: float | None = None,
     clip_percentiles: tuple[float, float] | None = None,
@@ -428,6 +504,8 @@ def plot_raw_spectrum(
         Matplotlib colormap name. Default is "viridis".
     figsize : tuple[float, float] | None
         Figure size as (width, height) in inches.
+    dpi : float | None
+        Figure display DPI and default saved-image DPI. Must be positive.
     clip_low : float | None
         Minimum value for colormap normalization.
     clip_high : float | None
@@ -468,6 +546,7 @@ def plot_raw_spectrum(
         title=title,
         cmap=cmap,
         figsize=figsize,
+        dpi=dpi,
         ax=ax,
         show_colorbar=show_colorbar,
         time_format=time_format,
@@ -483,6 +562,7 @@ def plot_background_subtracted(
     title: str | None = None,
     cmap: str = "jet",
     figsize: tuple[float, float] | None = None,
+    dpi: float | None = None,
     clip_low: float | None = None,
     clip_high: float | None = None,
     clip_percentiles: tuple[float, float] | None = None,
@@ -511,6 +591,8 @@ def plot_background_subtracted(
         showing positive/negative deviations.
     figsize : tuple[float, float] | None
         Figure size as (width, height) in inches.
+    dpi : float | None
+        Figure display DPI and default saved-image DPI. Must be positive.
     clip_low : float | None
         Minimum value for colormap normalization.
     clip_high : float | None
@@ -551,6 +633,7 @@ def plot_background_subtracted(
         title=title,
         cmap=cmap,
         figsize=figsize,
+        dpi=dpi,
         ax=ax,
         show_colorbar=show_colorbar,
         time_format=time_format,
@@ -561,17 +644,83 @@ def plot_background_subtracted(
     )
 
 
+def _process_light_curve_spectrum(
+    ds: DynamicSpectrum,
+    process: Literal["raw", "background_subtracted", "noise_reduced"],
+    clip_low: float | None,
+    clip_high: float | None,
+) -> DynamicSpectrum:
+    """Apply the processing shared by one or more light curves."""
+    from .processing import background_subtract, noise_reduce_mean_clip
+
+    if process == "noise_reduced" and (clip_low is None or clip_high is None):
+        raise ValueError(
+            "When process='noise_reduced', both clip_low and clip_high must be provided."
+        )
+    if process == "background_subtracted":
+        return background_subtract(ds)
+    if process == "noise_reduced":
+        return noise_reduce_mean_clip(
+            ds,
+            clip_low=cast(float, clip_low),
+            clip_high=cast(float, clip_high),
+            scale=None,
+        )
+    return ds
+
+
+def _light_curve_from_processed(
+    ds: DynamicSpectrum,
+    processed: DynamicSpectrum,
+    frequency_mhz: float,
+    intensity_units: Literal["digits", "dB"],
+) -> tuple[float, np.ndarray]:
+    """Extract one frequency channel from an already processed spectrum."""
+    from .exceptions import FrequencyOutOfRangeError
+
+    freq_min = float(ds.freqs_mhz.min())
+    freq_max = float(ds.freqs_mhz.max())
+    if frequency_mhz < freq_min or frequency_mhz > freq_max:
+        raise FrequencyOutOfRangeError(
+            f"Requested frequency {frequency_mhz} MHz is outside the spectrum's "
+            f"frequency range [{freq_min:.2f}, {freq_max:.2f}] MHz."
+        )
+
+    freq_idx = int(np.argmin(np.abs(ds.freqs_mhz - frequency_mhz)))
+    actual_freq = float(ds.freqs_mhz[freq_idx])
+    values = np.asarray(processed.data[freq_idx, :], dtype=float)
+    if intensity_units == "dB":
+        values = values * DIGITS_TO_DB_FACTOR
+    return actual_freq, values
+
+
+def _light_curve_series(
+    ds: DynamicSpectrum,
+    frequency_mhz: float,
+    process: Literal["raw", "background_subtracted", "noise_reduced"],
+    clip_low: float | None,
+    clip_high: float | None,
+    intensity_units: Literal["digits", "dB"],
+) -> tuple[float, np.ndarray]:
+    """Return the actual channel frequency and processed intensity series."""
+    processed = _process_light_curve_spectrum(ds, process, clip_low, clip_high)
+    return _light_curve_from_processed(ds, processed, frequency_mhz, intensity_units)
+
+
 def plot_light_curve(
     ds: DynamicSpectrum,
     frequency_mhz: float,
     process: Literal["raw", "background_subtracted", "noise_reduced"] = "raw",
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
+    dpi: float | None = None,
     ax: Optional[plt.Axes] = None,
     time_format: Literal["seconds", "ut"] = "seconds",
     clip_low: float | None = None,
     clip_high: float | None = None,
     intensity_units: Literal["digits", "dB"] = "digits",
+    save_path: str | Path | None = None,
+    savefig_kwargs: dict[str, Any] | None = None,
     **plot_kwargs,
 ) -> tuple["Figure", "Axes", "plt.Line2D"]:
     """
@@ -597,6 +746,8 @@ def plot_light_curve(
         Plot title. If None, generates title from filename and frequency.
     figsize : tuple[float, float] | None
         Figure size as (width, height) in inches. Ignored if ax is provided.
+    dpi : float | None
+        Figure display DPI and default saved-image DPI. Must be positive.
     ax : plt.Axes | None
         Existing axes to plot on. If None, creates a new figure.
     time_format : {"seconds", "ut"}
@@ -609,6 +760,10 @@ def plot_light_curve(
     intensity_units : {"digits", "dB"}
         Units for the intensity axis. "digits" shows raw ADU values,
         "dB" converts using dB = Digits * 0.384 (pseudo-calibration).
+    save_path : str | Path | None
+        Optional output path for saving the figure.
+    savefig_kwargs : dict[str, Any] | None
+        Optional keyword arguments passed to ``Figure.savefig``.
     **plot_kwargs
         Additional keyword arguments passed to matplotlib's plot().
 
@@ -635,57 +790,21 @@ def plot_light_curve(
     ...     clip_low=-5, clip_high=20
     ... )
     """
-    from .exceptions import FrequencyOutOfRangeError
-    from .processing import background_subtract, noise_reduce_mean_clip
-
-    # Validate frequency is within range
-    freq_min = float(ds.freqs_mhz.min())
-    freq_max = float(ds.freqs_mhz.max())
-
-    if frequency_mhz < freq_min or frequency_mhz > freq_max:
-        raise FrequencyOutOfRangeError(
-            f"Requested frequency {frequency_mhz} MHz is outside the spectrum's "
-            f"frequency range [{freq_min:.2f}, {freq_max:.2f}] MHz."
-        )
-
-    # Validate clip parameters for noise_reduced
-    if process == "noise_reduced":
-        if clip_low is None or clip_high is None:
-            raise ValueError(
-                "When process='noise_reduced', both clip_low and clip_high must be provided."
-            )
-        assert clip_low is not None
-        assert clip_high is not None
-
-    # Find the closest frequency channel
-    freq_idx = int(np.argmin(np.abs(ds.freqs_mhz - frequency_mhz)))
-    actual_freq = float(ds.freqs_mhz[freq_idx])
-
-    # Apply processing
-    if process == "background_subtracted":
-        ds_processed = background_subtract(ds)
-    elif process == "noise_reduced":
-        ds_processed = noise_reduce_mean_clip(
-            ds,
-            clip_low=cast(float, clip_low),
-            clip_high=cast(float, clip_high),
-            scale=None,
-        )
-    else:  # raw
-        ds_processed = ds
-
-    # Extract light curve data
-    light_curve = ds_processed.data[freq_idx, :]
-
-    # Convert to dB if requested
-    if intensity_units == "dB":
-        light_curve = light_curve * DIGITS_TO_DB_FACTOR
+    actual_freq, light_curve = _light_curve_series(
+        ds,
+        frequency_mhz,
+        process,
+        clip_low,
+        clip_high,
+        intensity_units,
+    )
 
     # Create figure and axes
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
         fig = cast("Figure", ax.figure)
+    _set_figure_dpi(fig, dpi)
 
     # Prepare time axis
     if time_format == "ut":
@@ -726,4 +845,260 @@ def plot_light_curve(
     else:
         ax.set_ylabel("Intensity [Digits]")
 
+    _save_figure_if_requested(fig, save_path, savefig_kwargs, dpi)
     return fig, ax, line
+
+
+def plot_spectrum_with_light_curves(
+    ds: DynamicSpectrum,
+    frequencies_mhz: float | Sequence[float],
+    *,
+    process: Literal["raw", "background_subtracted", "noise_reduced"] = "raw",
+    time_format: Literal["seconds", "ut"] = "seconds",
+    intensity_units: Literal["digits", "dB"] = "digits",
+    title: str | None = None,
+    cmap: str = "inferno",
+    figsize: tuple[float, float] | None = None,
+    dpi: float | None = None,
+    show_colorbar: bool = True,
+    clip_low: float | None = None,
+    clip_high: float | None = None,
+    show_frequency_guides: bool = True,
+    line_kwargs: Mapping[str, Any] | None = None,
+    save_path: str | Path | None = None,
+    savefig_kwargs: dict[str, Any] | None = None,
+    **imshow_kwargs: Any,
+) -> SpectrumLightCurvePlot:
+    """Overlay one or more frequency-channel light curves on a spectrum.
+
+    The spectrum uses the left frequency axis. Light-curve intensity uses a
+    separate right axis, and optional dashed guides identify the selected
+    channels on the spectrum.
+    """
+    requested = (
+        (float(cast(Any, frequencies_mhz)),)
+        if np.isscalar(frequencies_mhz)
+        else tuple(float(value) for value in cast(Sequence[float], frequencies_mhz))
+    )
+    if not requested:
+        raise ValueError("frequencies_mhz must contain at least one frequency.")
+    processed = _process_light_curve_spectrum(ds, process, clip_low, clip_high)
+    series = tuple(
+        _light_curve_from_processed(ds, processed, frequency, intensity_units)
+        for frequency in requested
+    )
+
+    fig, spectrum_ax, image = plot_dynamic_spectrum(
+        ds,
+        process=process,
+        clip_low=clip_low,
+        clip_high=clip_high,
+        title=title or "Dynamic Spectrum with Light Curves",
+        cmap=cmap,
+        figsize=figsize,
+        dpi=dpi,
+        show_colorbar=show_colorbar,
+        time_format=time_format,
+        intensity_units=intensity_units,
+        **imshow_kwargs,
+    )
+    light_curve_ax = spectrum_ax.twinx()
+    style = dict(line_kwargs or {})
+    custom_color = style.pop("color", None)
+    custom_label = style.pop("label", None)
+
+    if time_format == "ut":
+        converter = TimeAxisConverter.from_dynamic_spectrum(ds)
+        time_values = ds.time_s + converter.ut_start_sec
+    else:
+        time_values = ds.time_s
+
+    lines: list[plt.Line2D] = []
+    actual_frequencies: list[float] = []
+    for index, (actual_frequency, values) in enumerate(series):
+        color = custom_color or f"C{index % 10}"
+        label = custom_label if custom_label is not None and len(requested) == 1 else None
+        (line,) = light_curve_ax.plot(
+            time_values,
+            values,
+            color=color,
+            label=label or f"{actual_frequency:.2f} MHz",
+            **style,
+        )
+        lines.append(line)
+        actual_frequencies.append(actual_frequency)
+        if show_frequency_guides:
+            spectrum_ax.axhline(
+                actual_frequency,
+                color=color,
+                linestyle="--",
+                linewidth=0.8,
+                alpha=0.75,
+            )
+
+    light_curve_ax.set_xlim(spectrum_ax.get_xlim())
+    light_curve_ax.set_ylabel(
+        "Light-Curve Intensity [dB]"
+        if intensity_units == "dB"
+        else "Light-Curve Intensity [Digits]"
+    )
+    light_curve_ax.grid(False)
+    light_curve_ax.legend(loc="upper right")
+    _save_figure_if_requested(fig, save_path, savefig_kwargs, dpi)
+    return SpectrumLightCurvePlot(
+        fig,
+        spectrum_ax,
+        light_curve_ax,
+        image,
+        tuple(lines),
+        tuple(actual_frequencies),
+    )
+
+
+def _goes_x_values(ds: DynamicSpectrum, goes: Any, time_format: Literal["seconds", "ut"]) -> np.ndarray:
+    if ds.start_datetime is None:
+        raise ValueError("GOES plotting requires DynamicSpectrum observation_start metadata.")
+    base = np.datetime64(ds.start_datetime.replace(tzinfo=None), "ns")
+    elapsed = (np.asarray(goes.time_utc, dtype="datetime64[ns]") - base) / np.timedelta64(1, "s")
+    values = np.asarray(elapsed, dtype=float)
+    if time_format == "ut":
+        converter = TimeAxisConverter.from_dynamic_spectrum(ds)
+        values = values + converter.ut_start_sec
+    return values
+
+
+def _plot_goes_channel(ax: "Axes", x_values: np.ndarray, flux: np.ndarray, channel: str) -> None:
+    from .goes import GOES_CHANNEL_LABELS, GOES_CLASS_LEVELS
+
+    colors = {"xrsa": "#2f9ed1", "xrsb": "#ef476f"}
+    mask = np.isfinite(x_values) & np.isfinite(flux) & (flux > 0.0)
+    if not np.any(mask):
+        raise ValueError(f"GOES channel {channel} contains no positive finite samples.")
+    ax.plot(
+        x_values[mask],
+        flux[mask],
+        color=colors[channel],
+        linewidth=1.25 if channel == "xrsb" else 1.05,
+        label=GOES_CHANNEL_LABELS[channel],
+    )
+    ax.set_yscale("log")
+    ax.set_ylabel("Flux [W/m²]")
+    ax.grid(True, which="both", alpha=0.2)
+    if channel == "xrsb":
+        for level, label in GOES_CLASS_LEVELS:
+            ax.axhline(level, color="0.55", linestyle="--", linewidth=0.6, alpha=0.45)
+            ax.annotate(
+                label,
+                xy=(1.002, level),
+                xycoords=("axes fraction", "data"),
+                va="center",
+                fontsize=8,
+                color="0.4",
+            )
+    ax.legend(loc="best")
+
+
+def plot_spectrum_with_goes(
+    ds: DynamicSpectrum,
+    goes: Any = None,
+    *,
+    layout: Literal["overlay", "stacked"] = "overlay",
+    channels: tuple[str, ...] = ("xrsa", "xrsb"),
+    process: Literal["raw", "background_subtracted", "noise_reduced"] = "raw",
+    time_format: Literal["seconds", "ut"] = "ut",
+    title: str | None = None,
+    cmap: str = "inferno",
+    figsize: tuple[float, float] | None = None,
+    dpi: float | None = None,
+    show_colorbar: bool = True,
+    clip_low: float | None = None,
+    clip_high: float | None = None,
+    clip_percentiles: tuple[float, float] | None = None,
+    save_path: str | Path | None = None,
+    savefig_kwargs: dict[str, Any] | None = None,
+    fetch_kwargs: Mapping[str, Any] | None = None,
+    **imshow_kwargs: Any,
+) -> SpectrumGOESPlot:
+    """Plot a dynamic spectrum with GOES curves overlaid or in shared-x panels.
+
+    When ``goes`` is omitted, matching science-quality one-minute XRS data are
+    retrieved from the official NOAA/NCEI archive. A valid cache may satisfy
+    the request; otherwise internet access is required. Pass ``fetch_kwargs``
+    to configure retrieval. Supplying ``goes`` keeps support for already-loaded
+    data and local archive files.
+    """
+    from .goes import GOESXRayData, fetch_goes_for_spectrum, load_goes_xray
+
+    if layout not in {"overlay", "stacked"}:
+        raise ValueError("layout must be one of: 'overlay', 'stacked'")
+    if goes is None:
+        goes_data = fetch_goes_for_spectrum(ds, **dict(fetch_kwargs or {}))
+    else:
+        if fetch_kwargs:
+            raise ValueError("fetch_kwargs can only be used when goes is omitted.")
+        goes_data = goes if isinstance(goes, GOESXRayData) else load_goes_xray(goes)
+    requested = tuple(dict.fromkeys(str(channel).lower() for channel in channels))
+    invalid = [channel for channel in requested if channel not in {"xrsa", "xrsb"}]
+    if invalid:
+        raise ValueError(f"Unsupported GOES channels: {', '.join(invalid)}")
+    available = tuple(channel for channel in requested if channel in goes_data.available_channels)
+    if not available:
+        raise ValueError("None of the requested GOES channels are available.")
+    x_values = _goes_x_values(ds, goes_data, time_format)
+
+    if layout == "overlay":
+        fig, spectrum_ax, image = plot_dynamic_spectrum(
+            ds,
+            process=process,
+            time_format=time_format,
+            title=title,
+            cmap=cmap,
+            figsize=figsize,
+            dpi=dpi,
+            show_colorbar=show_colorbar,
+            clip_low=clip_low,
+            clip_high=clip_high,
+            clip_percentiles=clip_percentiles,
+            **imshow_kwargs,
+        )
+        overlay_ax = spectrum_ax.twinx()
+        for channel in available:
+            _plot_goes_channel(overlay_ax, x_values, goes_data.flux(channel), channel)
+        overlay_ax.set_xlim(spectrum_ax.get_xlim())
+        goes_axes: Mapping[str, Axes] = {channel: overlay_ax for channel in available}
+    else:
+        height_ratios = [3.5] + [1.0] * len(available)
+        fig, axes = plt.subplots(
+            1 + len(available),
+            1,
+            sharex=True,
+            figsize=figsize or (11, 7.5),
+            gridspec_kw={"height_ratios": height_ratios, "hspace": 0.08},
+        )
+        _set_figure_dpi(fig, dpi)
+        axes_array = np.atleast_1d(axes)
+        spectrum_ax = axes_array[0]
+        _fig, _ax, image = plot_dynamic_spectrum(
+            ds,
+            process=process,
+            time_format=time_format,
+            title=title,
+            cmap=cmap,
+            ax=spectrum_ax,
+            dpi=dpi,
+            show_colorbar=show_colorbar,
+            clip_low=clip_low,
+            clip_high=clip_high,
+            clip_percentiles=clip_percentiles,
+            **imshow_kwargs,
+        )
+        goes_axes = {}
+        for channel, channel_ax in zip(available, axes_array[1:]):
+            _plot_goes_channel(channel_ax, x_values, goes_data.flux(channel), channel)
+            channel_ax.set_xlim(spectrum_ax.get_xlim())
+            goes_axes[channel] = channel_ax
+        axes_array[-1].set_xlabel(spectrum_ax.get_xlabel())
+        spectrum_ax.set_xlabel("")
+
+    _save_figure_if_requested(fig, save_path, savefig_kwargs, dpi)
+    return SpectrumGOESPlot(fig, spectrum_ax, MappingProxyType(dict(goes_axes)), image, layout)

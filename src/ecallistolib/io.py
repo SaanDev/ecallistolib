@@ -221,6 +221,27 @@ def read_fits(path: str | Path) -> DynamicSpectrum:
             if ut_start_sec is None and observation_start is not None:
                 ut_start_sec = _seconds_since_midnight(observation_start)
 
+            header = hdul[0].header
+            # Keep the small subset needed by scientifically faithful
+            # frequency combination.  Retaining the complete Header would make
+            # every metadata copy needlessly expensive and hard to serialize.
+            combine_header_keys = (
+                "FREQMIN",
+                "FREQMAX",
+                "CDELT2",
+                "FOCUS",
+                "FOCUSID",
+                "RECEIVER",
+                "RECEIVERID",
+                "RCVR",
+                "RCVRID",
+            )
+            combine_header = {
+                key: header[key]
+                for key in combine_header_keys
+                if key in header
+            }
+
     except OSError as e:
         raise InvalidFITSError(f"Failed to open FITS file: {path}") from e
 
@@ -232,6 +253,7 @@ def read_fits(path: str | Path) -> DynamicSpectrum:
         "ut_start_sec": ut_start_sec,
         "observation_start": observation_start,
         "observation_end": observation_end,
+        "fits_header": combine_header,
     }
     if parts is not None:
         meta |= {

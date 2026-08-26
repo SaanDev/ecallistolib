@@ -40,3 +40,28 @@ class CropError(ECallistoError):
 class FrequencyOutOfRangeError(ECallistoError):
     """Raised when the requested frequency is outside the spectrum's frequency range."""
     pass
+
+
+class WorkflowError(ECallistoError):
+    """Raised when FITS inputs cannot be organized into an analysis workflow."""
+    pass
+
+
+class GOESError(ECallistoError):
+    """Base exception for GOES XRS data operations."""
+    pass
+
+
+class GOESDownloadError(GOESError):
+    """Raised when GOES XRS archive retrieval fails."""
+    pass
+
+
+class GOESConnectionError(GOESDownloadError):
+    """Raised when the official GOES XRS archive cannot be reached."""
+    pass
+
+
+class GOESDataError(GOESError):
+    """Raised when GOES XRS data are invalid or unsupported."""
+    pass

@@ -164,12 +164,8 @@ def mitigate_rfi_mad(
     # Avoid zero division or zero MAD issues
     valid_mads = mads > 0
     # Create mask where MAD is valid AND data exceeds threshold
-    final_mask = np.zeros_like(outlier_mask)
-    for i in range(data.shape[0]):
-        if valid_mads[i, 0]:
-            final_mask[i, :] = outlier_mask[i, :]
-
-    data[final_mask] = np.broadcast_to(medians, data.shape)[final_mask]
+    final_mask = outlier_mask & valid_mads
+    np.copyto(data, medians, where=final_mask)
 
     meta = dict(ds.meta)
     meta["rfi_mitigation"] = {
@@ -205,10 +201,21 @@ def background_subtract_frequency(ds: DynamicSpectrum) -> DynamicSpectrum:
 
 
 
-try:
-    from scipy.ndimage import median_filter as _median_filter
-except Exception:  # pragma: no cover - scipy optional in isolated environments
-    _median_filter = None
+_median_filter = None
+_median_filter_checked = False
+
+
+def _get_median_filter():
+    """Load SciPy only when the accelerated RFI path is first requested."""
+    global _median_filter, _median_filter_checked
+    if not _median_filter_checked:
+        try:
+            from scipy.ndimage import median_filter
+        except Exception:  # pragma: no cover - scipy optional in isolated environments
+            median_filter = None
+        _median_filter = median_filter
+        _median_filter_checked = True
+    return _median_filter
 
 @dataclass(frozen=True)
 class RFIResult:
@@ -235,13 +242,23 @@ def _ensure_odd(v: int) -> int:
 def _median2d(arr: np.ndarray, kernel_freq: int, kernel_time: int) -> np.ndarray:
     kernel_freq = _ensure_odd(kernel_freq)
     kernel_time = _ensure_odd(kernel_time)
-    if _median_filter is None:
+    median_filter = _get_median_filter()
+    if median_filter is None:
         pad_freq = kernel_freq // 2
         pad_time = kernel_time // 2
         padded = np.pad(arr, ((pad_freq, pad_freq), (pad_time, pad_time)), mode="edge")
         windows = np.lib.stride_tricks.sliding_window_view(padded, (kernel_freq, kernel_time))
-        return np.nanmedian(windows, axis=(-2, -1))
-    return _median_filter(arr, size=(kernel_freq, kernel_time), mode="nearest")
+        # NumPy's reduction may materialize its full sliding-window input. Work
+        # in frequency chunks so the fallback stays memory bounded even for a
+        # full 200 x 3600 CALLISTO segment.
+        output = np.empty_like(arr)
+        values_per_row = max(1, arr.shape[1] * kernel_freq * kernel_time)
+        rows_per_chunk = max(1, 4_000_000 // values_per_row)
+        for start in range(0, arr.shape[0], rows_per_chunk):
+            stop = min(arr.shape[0], start + rows_per_chunk)
+            output[start:stop] = np.nanmedian(windows[start:stop], axis=(-2, -1))
+        return output
+    return median_filter(arr, size=(kernel_freq, kernel_time), mode="nearest")
 
 def _mask_hot_channels(data: np.ndarray, z_thresh: float) -> list[int]:
     if data.ndim != 2 or data.shape[0] == 0:
@@ -258,7 +275,9 @@ def _repair_masked_channels(cleaned: np.ndarray, masked_indices: list[int]) -> n
     if cleaned.ndim != 2 or not masked_indices:
         return cleaned
 
-    out = cleaned.copy()
+    # ``cleaned`` is the newly allocated median-filter result in the public
+    # pipeline, so repairing it in place avoids another full-sized array.
+    out = cleaned
     n_rows = out.shape[0]
     for idx in masked_indices:
         if idx <= 0:
@@ -280,10 +299,9 @@ def _percentile_clip_per_channel(data: np.ndarray, upper_percentile: float) -> n
     if pct <= 0 or pct >= 100:
         return data
 
-    out = data.copy()
+    out = data
     highs = np.nanpercentile(out, pct, axis=1)
-    for i in range(out.shape[0]):
-        out[i] = np.minimum(out[i], highs[i])
+    np.minimum(out, highs[:, None], out=out)
     return out
 
 def clean_rfi(

@@ -47,7 +47,8 @@ def test_combine_frequency_happy_path(tmp_path):
     create_sample_fits(f2, n_freq=10, n_time=20, freq_start=200, freq_end=300)
 
     out = combine_frequency(f1, f2)
-    assert out.shape == (20, 20)
+    # Shared 200 MHz boundary is represented once on the regularized grid.
+    assert out.shape == (19, 20)
     assert out.meta["combined"]["mode"] == "frequency"
 
 
