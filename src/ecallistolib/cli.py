@@ -1,3 +1,9 @@
+"""
+e-callistolib: Tools for e-CALLISTO FITS dynamic spectra.
+Sahan S Liyanage (sahanslst@gmail.com)
+Astronomical and Space Science Unit, University of Colombo, Sri Lanka.
+"""
+
 import argparse
 from datetime import date
 import sys
