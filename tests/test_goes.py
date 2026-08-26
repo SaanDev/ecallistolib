@@ -180,6 +180,7 @@ def test_fetch_selects_best_satellite_without_live_network(monkeypatch, tmp_path
             return None
 
     monkeypatch.setattr("requests.Session", FakeSession)
+    monkeypatch.setattr(goes_module, "_import_netcdf4", lambda: object())
     monkeypatch.setattr(
         goes_module,
         "_download_day",
@@ -218,6 +219,7 @@ def test_fetch_cross_midnight_uses_both_days_and_explicit_satellite(monkeypatch,
 
     requested: list[tuple[int, date]] = []
     monkeypatch.setattr("requests.Session", FakeSession)
+    monkeypatch.setattr(goes_module, "_import_netcdf4", lambda: object())
 
     def fake_download(satellite, day, **kwargs):
         requested.append((satellite, day))
@@ -296,6 +298,7 @@ def test_fetch_reports_unavailable_internet_connection(monkeypatch, tmp_path):
             raise OSError("network unreachable")
 
     monkeypatch.setattr("requests.Session", Session)
+    monkeypatch.setattr(goes_module, "_import_netcdf4", lambda: object())
 
     with pytest.raises(GOESConnectionError, match="internet connection is required"):
         fetch_goes_xray(
